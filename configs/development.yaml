@@ -1,0 +1,59 @@
+server:
+  port: 8080
+  readTimeout: 30s
+  writeTimeout: 30s
+  shutdownTimeout: 15s
+
+postgres:
+  host: localhost
+  port: 5432
+  database: searchplatform
+  user: searchplatform
+  password: localdev
+  sslMode: disable
+  maxOpenConns: 25
+  maxIdleConns: 5
+  connMaxLifetime: 5m
+
+kafka:
+  brokers:
+    - localhost:9092
+  consumerGroup: searchplatform-dev
+  topics:
+    documentIngest: document.ingest
+    indexComplete: index.complete
+    cacheInvalidate: cache.invalidate
+    analyticsEvents: analytics.events
+  
+redis:
+  addr: localhost:6379
+  password: ""
+  db: 0
+  poolSize: 10
+  cacheTTL: 60s
+
+indexer:
+  dataDir: ./data/index
+  segmentMaxSize: 10485760
+  mergeInterval: 30s
+  flushInterval: 5s
+  maxSegmentsBeforeMerge: 5
+
+search:
+  maxResults: 100
+  defaultLimit: 10
+  timeoutPerShard: 5s
+  maxConcurrentQueries: 100
+
+logging:
+  level: debug
+  format: text
+
+tracing:
+  enabled: true
+  endpoint: localhost:4317
+  sampleRate: 1.0
+
+metrics:
+  enabled: true
+  port: 9090

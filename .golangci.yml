@@ -1,0 +1,50 @@
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gosimple
+    - gocritic
+    - gofmt
+    - goimports
+    - misspell
+    - prealloc
+    - unconvert
+    - bodyclose
+    - nilerr
+    - errname
+
+linters-settings:
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - performance
+    disabled-checks:
+      - hugeParam
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  govet:
+    enable-all: true
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gocritic
+  max-issues-per-linter: 50
+  max-same-issues: 3
+
+severity:
+  default-severity: warning
+  rules:
+    - linters:
+        - errcheck
+      severity: error

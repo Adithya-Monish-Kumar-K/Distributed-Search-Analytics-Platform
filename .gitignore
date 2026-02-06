@@ -1,0 +1,43 @@
+# Binaries
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go
+vendor/
+*.test
+*.out
+coverage.html
+coverage.txt
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Build artifacts
+dist/
+tmp/
+
+# Data directories (runtime)
+data/
+
+# Dependency directories
+node_modules/
+
+# Docker
+docker-compose.override.yml
