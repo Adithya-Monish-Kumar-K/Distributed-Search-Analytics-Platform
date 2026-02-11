@@ -1,0 +1,74 @@
+package main
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/indexer"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/executor"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/handler"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/config"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/logger"
+)
+
+func main() {
+	configPath := flag.String("config", "configs/development.yaml", "path to config file")
+	flag.Parse()
+
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	logger.Setup(cfg.Logging.Level, cfg.Logging.Format)
+	slog.Info("starting search service", "port", cfg.Server.Port)
+	engine, err := indexer.NewEngine(cfg.Indexer)
+	if err != nil {
+		slog.Error("failed to create index engine", "error", err)
+		os.Exit(1)
+	}
+	defer engine.Close()
+	slog.Info("index engine initialized",
+		"data_dir", cfg.Indexer.DataDir,
+	)
+	exec := executor.New(engine)
+	h := handler.New(exec, cfg.Search.DefaultLimit, cfg.Search.MaxResults)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/search", h.Search)
+	mux.HandleFunc("GET /health", h.Health)
+
+	server := &http.Server{
+		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
+		Handler:      mux,
+		ReadTimeout:  cfg.Server.ReadTimeout,
+		WriteTimeout: cfg.Server.WriteTimeout,
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		<-ctx.Done()
+		slog.Info("shutdown signal received")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			slog.Error("server shutdown error", "error", err)
+		}
+	}()
+
+	slog.Info("search service listening", "addr", server.Addr)
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		slog.Error("server error", "error", err)
+		os.Exit(1)
+	}
+
+	slog.Info("search service stopped")
+}
