@@ -71,7 +71,7 @@ type RedisConfig struct {
 
 type IndexerConfig struct {
 	DataDir                string        `yaml:"dataDir"`
-	SEgmentMaxSize         int64         `yaml:"segmentMaxSize"`
+	SegmentMaxSize         int64         `yaml:"segmentMaxSize"`
 	MergeInterval          time.Duration `yaml:"mergeInterval"`
 	FlushInterval          time.Duration `yaml:"flushInterval"`
 	MaxSegmentsBeforeMerge int           `yaml:"maxSegmentsBeforeMerge"`
