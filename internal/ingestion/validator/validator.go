@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Adithya-Monish-Kumar-K/searchplatform/internal/ingestion"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/ingestion"
 )
 
 const (

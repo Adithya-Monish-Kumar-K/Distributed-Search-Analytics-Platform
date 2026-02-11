@@ -10,12 +10,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/Adithya-Monish-Kumar-K/searchplatform/internal/ingestion/handler"
-	"github.com/Adithya-Monish-Kumar-K/searchplatform/internal/ingestion/publisher"
-	"github.com/Adithya-Monish-Kumar-K/searchplatform/pkg/config"
-	"github.com/Adithya-Monish-Kumar-K/searchplatform/pkg/kafka"
-	"github.com/Adithya-Monish-Kumar-K/searchplatform/pkg/logger"
-	"github.com/Adithya-Monish-Kumar-K/searchplatform/pkg/postgres"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/ingestion/handler"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/ingestion/publisher"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/config"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/kafka"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/logger"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/postgres"
 )
 
 func main() {

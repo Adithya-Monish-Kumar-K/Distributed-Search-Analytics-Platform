@@ -1,4 +1,4 @@
-module github.com/Adithya-Monish-Kumar-K/searchplatform
+module github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform
 
 go 1.25.7
 

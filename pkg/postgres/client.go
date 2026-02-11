@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Adithya-Monish-Kumar-K/searchplatform/pkg/config"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/config"
 	_ "github.com/lib/pq"
 )
 

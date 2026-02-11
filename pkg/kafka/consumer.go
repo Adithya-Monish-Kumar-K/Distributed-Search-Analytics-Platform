@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/Adithya-Monish-Kumar-K/searchplatform/pkg/config"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/config"
 	"github.com/segmentio/kafka-go"
 )
 

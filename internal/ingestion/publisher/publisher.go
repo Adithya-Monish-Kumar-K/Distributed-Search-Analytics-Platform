@@ -9,10 +9,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Adithya-Monish-Kumar-K/searchplatform/internal/ingestion"
-	apperrors "github.com/Adithya-Monish-Kumar-K/searchplatform/pkg/errors"
-	"github.com/Adithya-Monish-Kumar-K/searchplatform/pkg/kafka"
-	"github.com/Adithya-Monish-Kumar-K/searchplatform/pkg/postgres"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/ingestion"
+	apperrors "github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/errors"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/kafka"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/postgres"
 )
 
 const totalShards = 8

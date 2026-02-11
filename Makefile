@@ -1,7 +1,7 @@
 .PHONY: all build test lint clean fmt proto migrate-up migrate-down docker-build help
 
 # Variables
-MODULE := github.com/Adithya-Monish-Kumar-K/searchplatform
+MODULE := github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform
 SERVICES := gateway ingestion indexer searcher analytics auth
 BIN_DIR := bin
 GO := go

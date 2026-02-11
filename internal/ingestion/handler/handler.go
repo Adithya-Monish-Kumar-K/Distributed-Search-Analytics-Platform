@@ -6,11 +6,11 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/Adithya-Monish-Kumar-K/searchplatform/internal/ingestion"
-	"github.com/Adithya-Monish-Kumar-K/searchplatform/internal/ingestion/publisher"
-	"github.com/Adithya-Monish-Kumar-K/searchplatform/internal/ingestion/validator"
-	apperrors "github.com/Adithya-Monish-Kumar-K/searchplatform/pkg/errors"
-	"github.com/Adithya-Monish-Kumar-K/searchplatform/pkg/logger"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/ingestion"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/ingestion/publisher"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/ingestion/validator"
+	apperrors "github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/errors"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/logger"
 )
 
 type Handler struct {
