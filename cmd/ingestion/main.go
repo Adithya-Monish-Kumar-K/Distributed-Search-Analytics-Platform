@@ -37,7 +37,7 @@ func main() {
 	slog.Info("connected to postgres")
 	producer := kafka.NewProducer(cfg.Kafka, cfg.Kafka.Topics.DocumentIngest)
 	defer producer.Close()
-	slog.Info("kafka producer intialized", "topic", cfg.Kafka.Topics.DocumentIngest)
+	slog.Info("kafka producer initialized", "topic", cfg.Kafka.Topics.DocumentIngest)
 	pub := publisher.New(db, producer)
 	h := handler.New(pub)
 	mux := http.NewServeMux()

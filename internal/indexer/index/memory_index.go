@@ -69,3 +69,46 @@ func (m *MemoryIndex) Search(term string) PostingList {
 	})
 	return result
 }
+
+func (m *MemoryIndex) Snapshot() []TermEntry {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	entries := make([]TermEntry, 0, len(m.index))
+	for term, docs := range m.index {
+		postings := make(PostingList, 0, len(docs))
+		for _, posting := range docs {
+			postings = append(postings, *posting)
+		}
+		sort.Slice(postings, func(i, j int) bool {
+			return postings[i].DocID < postings[j].DocID
+		})
+		entries = append(entries, TermEntry{
+			Term:     term,
+			Postings: postings,
+		})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Term < entries[j].Term
+	})
+	return entries
+}
+
+func (m *MemoryIndex) Size() int64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.size
+}
+
+func (m *MemoryIndex) DocCount() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.docCount
+}
+
+func (m *MemoryIndex) Reset() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.index = make(map[string]map[string]*Posting)
+	m.docCount = 0
+	m.size = 0
+}
