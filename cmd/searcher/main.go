@@ -10,7 +10,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/indexer"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/indexer/shard"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/cache"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/executor"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/handler"
@@ -18,6 +18,8 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/logger"
 	pkgredis "github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/redis"
 )
+
+const numShards = 8
 
 func main() {
 	configPath := flag.String("config", "configs/development.yaml", "path to config file")
@@ -30,14 +32,14 @@ func main() {
 	}
 
 	logger.Setup(cfg.Logging.Level, cfg.Logging.Format)
-	slog.Info("starting search service", "port", cfg.Server.Port)
-	engine, err := indexer.NewEngine(cfg.Indexer)
+	slog.Info("starting search service", "port", cfg.Server.Port, "num_shards", numShards)
+	router, err := shard.NewRouter(cfg.Indexer, numShards)
 	if err != nil {
-		slog.Error("failed to create index engine", "error", err)
+		slog.Error("failed to create shard router", "error", err)
 		os.Exit(1)
 	}
-	defer engine.Close()
-	slog.Info("index engine initialized", "data_dir", cfg.Indexer.DataDir)
+	defer router.Close()
+	slog.Info("shard router initialized", "data_dir", cfg.Indexer.DataDir)
 	var queryCache *cache.QueryCache
 	redisClient, err := pkgredis.NewClient(cfg.Redis)
 	if err != nil {
@@ -50,7 +52,7 @@ func main() {
 			"ttl", cfg.Redis.CacheTTL,
 		)
 	}
-	exec := executor.New(engine)
+	exec := executor.NewSharded(router.GetAllEngines())
 	h := handler.New(exec, queryCache, cfg.Search.DefaultLimit, cfg.Search.MaxResults)
 
 	mux := http.NewServeMux()

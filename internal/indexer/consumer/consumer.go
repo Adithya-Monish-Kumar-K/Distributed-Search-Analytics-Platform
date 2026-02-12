@@ -6,29 +6,59 @@ import (
 	"log/slog"
 
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/indexer"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/indexer/shard"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/ingestion"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/kafka"
 )
 
 type IndexConsumer struct {
-	engine   *indexer.Engine
 	consumer *kafka.Consumer
 	logger   *slog.Logger
 }
 
-func New(engine *indexer.Engine, kafkaConsumer *kafka.Consumer) *IndexConsumer {
+func New(kafkaConsumer *kafka.Consumer) *IndexConsumer {
 	return &IndexConsumer{
-		engine:   engine,
 		consumer: kafkaConsumer,
 		logger:   slog.Default().With("component", "index-consumer"),
 	}
 }
-
 func (ic *IndexConsumer) Start(ctx context.Context) error {
 	ic.logger.Info("index consumer starting")
 	return ic.consumer.Start(ctx)
 }
+func HandleMessageSharded(router *shard.Router) kafka.MessageHandler {
+	logger := slog.Default().With("component", "index-consumer")
+	return func(ctx context.Context, key []byte, value []byte) error {
+		event, err := kafka.DecodeJSON[ingestion.IngestEvent](value)
+		if err != nil {
+			logger.Error("failed to decode ingest event",
+				"error", err,
+				"key", string(key),
+			)
+			return nil
+		}
 
+		engine, err := router.Route(event.ShardID)
+		if err != nil {
+			return fmt.Errorf("routing shard %d: %w", event.ShardID, err)
+		}
+
+		logger.Debug("processing ingest event",
+			"doc_id", event.DocumentID,
+			"shard_id", event.ShardID,
+		)
+
+		if err := engine.IndexDocument(event.DocumentID, event.Title, event.Body); err != nil {
+			return fmt.Errorf("indexing document %s in shard %d: %w", event.DocumentID, event.ShardID, err)
+		}
+
+		logger.Info("document indexed",
+			"doc_id", event.DocumentID,
+			"shard_id", event.ShardID,
+		)
+		return nil
+	}
+}
 func HandleMessage(engine *indexer.Engine) kafka.MessageHandler {
 	logger := slog.Default().With("component", "index-consumer")
 	return func(ctx context.Context, key []byte, value []byte) error {

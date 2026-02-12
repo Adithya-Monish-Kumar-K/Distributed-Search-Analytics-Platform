@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -14,15 +15,18 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/logger"
 )
 
+type SearchExecutor interface {
+	Execute(ctx context.Context, plan *parser.QueryPlan, limit int) (*executor.SearchResult, error)
+}
 type Handler struct {
-	executor     *executor.Executor
+	executor     SearchExecutor
 	cache        *cache.QueryCache
 	defaultLimit int
 	maxResults   int
 	logger       *slog.Logger
 }
 
-func New(exec *executor.Executor, queryCache *cache.QueryCache, defaultLimit, maxResults int) *Handler {
+func New(exec SearchExecutor, queryCache *cache.QueryCache, defaultLimit, maxResults int) *Handler {
 	return &Handler{
 		executor:     exec,
 		cache:        queryCache,
@@ -31,7 +35,6 @@ func New(exec *executor.Executor, queryCache *cache.QueryCache, defaultLimit, ma
 		logger:       slog.Default().With("component", "search-handler"),
 	}
 }
-
 func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.FromContext(ctx)
@@ -111,7 +114,6 @@ func (h *Handler) CacheStats(w http.ResponseWriter, r *http.Request) {
 		"hit_rate": fmt.Sprintf("%.1f%%", hitRate),
 	})
 }
-
 func (h *Handler) CacheInvalidate(w http.ResponseWriter, r *http.Request) {
 	if h.cache == nil {
 		h.writeError(w, http.StatusServiceUnavailable, "caching is disabled")
