@@ -2,40 +2,40 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
 
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/cache"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/executor"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/parser"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/ranker"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/logger"
 )
 
-// Handler handles HTTP requests for the search API.
 type Handler struct {
 	executor     *executor.Executor
+	cache        *cache.QueryCache
 	defaultLimit int
 	maxResults   int
 	logger       *slog.Logger
 }
 
-// New creates a search Handler.
-func New(exec *executor.Executor, defaultLimit int, maxResults int) *Handler {
+func New(exec *executor.Executor, queryCache *cache.QueryCache, defaultLimit, maxResults int) *Handler {
 	return &Handler{
 		executor:     exec,
+		cache:        queryCache,
 		defaultLimit: defaultLimit,
 		maxResults:   maxResults,
 		logger:       slog.Default().With("component", "search-handler"),
 	}
 }
 
-// Search handles GET /api/v1/search?q=...&limit=...
 func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.FromContext(ctx)
 
-	// Parse query parameters
 	query := r.URL.Query().Get("q")
 	if query == "" {
 		h.writeError(w, http.StatusBadRequest, "query parameter 'q' is required")
@@ -55,7 +55,6 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 		limit = parsed
 	}
 
-	// Parse the query
 	plan := parser.Parse(query)
 	if len(plan.Terms) == 0 {
 		h.writeJSON(w, http.StatusOK, &executor.SearchResult{
@@ -65,13 +64,20 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Execute
-	result, err := h.executor.Execute(ctx, plan, limit)
+	var result *executor.SearchResult
+	var err error
+	cacheHit := false
+
+	if h.cache != nil {
+		result, cacheHit, err = h.cache.GetOrCompute(ctx, query, limit, func() (*executor.SearchResult, error) {
+			return h.executor.Execute(ctx, plan, limit)
+		})
+	} else {
+		result, err = h.executor.Execute(ctx, plan, limit)
+	}
+
 	if err != nil {
-		log.Error("search execution failed",
-			"query", query,
-			"error", err,
-		)
+		log.Error("search execution failed", "query", query, "error", err)
 		h.writeError(w, http.StatusInternalServerError, "search failed")
 		return
 	}
@@ -80,12 +86,46 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 		"query", query,
 		"total_hits", result.TotalHits,
 		"returned", len(result.Results),
+		"cache_hit", cacheHit,
 	)
 
 	h.writeJSON(w, http.StatusOK, result)
 }
+func (h *Handler) CacheStats(w http.ResponseWriter, r *http.Request) {
+	if h.cache == nil {
+		h.writeJSON(w, http.StatusOK, map[string]string{"status": "disabled"})
+		return
+	}
 
-// Health handles GET /health
+	hits, misses := h.cache.Stats()
+	total := hits + misses
+	var hitRate float64
+	if total > 0 {
+		hitRate = float64(hits) / float64(total) * 100
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"hits":     hits,
+		"misses":   misses,
+		"total":    total,
+		"hit_rate": fmt.Sprintf("%.1f%%", hitRate),
+	})
+}
+
+func (h *Handler) CacheInvalidate(w http.ResponseWriter, r *http.Request) {
+	if h.cache == nil {
+		h.writeError(w, http.StatusServiceUnavailable, "caching is disabled")
+		return
+	}
+
+	if err := h.cache.Invalidate(r.Context()); err != nil {
+		h.logger.Error("cache invalidation failed", "error", err)
+		h.writeError(w, http.StatusInternalServerError, "cache invalidation failed")
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string]string{"status": "invalidated"})
+}
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

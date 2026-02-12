@@ -11,10 +11,12 @@ import (
 	"syscall"
 
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/indexer"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/cache"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/executor"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/handler"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/config"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/logger"
+	pkgredis "github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/redis"
 )
 
 func main() {
@@ -35,13 +37,26 @@ func main() {
 		os.Exit(1)
 	}
 	defer engine.Close()
-	slog.Info("index engine initialized",
-		"data_dir", cfg.Indexer.DataDir,
-	)
+	slog.Info("index engine initialized", "data_dir", cfg.Indexer.DataDir)
+	var queryCache *cache.QueryCache
+	redisClient, err := pkgredis.NewClient(cfg.Redis)
+	if err != nil {
+		slog.Warn("redis unavailable, search caching disabled", "error", err)
+	} else {
+		defer redisClient.Close()
+		queryCache = cache.New(redisClient, cfg.Redis)
+		slog.Info("search cache enabled",
+			"addr", cfg.Redis.Addr,
+			"ttl", cfg.Redis.CacheTTL,
+		)
+	}
 	exec := executor.New(engine)
-	h := handler.New(exec, cfg.Search.DefaultLimit, cfg.Search.MaxResults)
+	h := handler.New(exec, queryCache, cfg.Search.DefaultLimit, cfg.Search.MaxResults)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/search", h.Search)
+	mux.HandleFunc("GET /api/v1/cache/stats", h.CacheStats)
+	mux.HandleFunc("POST /api/v1/cache/invalidate", h.CacheInvalidate)
 	mux.HandleFunc("GET /health", h.Health)
 
 	server := &http.Server{
