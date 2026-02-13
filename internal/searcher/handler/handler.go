@@ -15,7 +15,9 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/parser"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/ranker"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/logger"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/metrics"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/middleware"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/tracing"
 )
 
 type SearchExecutor interface {
@@ -26,26 +28,34 @@ type Handler struct {
 	executor     SearchExecutor
 	cache        *cache.QueryCache
 	collector    *analytics.Collector
+	metrics      *metrics.Metrics
 	defaultLimit int
 	maxResults   int
 	logger       *slog.Logger
 }
 
-func New(exec SearchExecutor, queryCache *cache.QueryCache, collector *analytics.Collector, defaultLimit, maxResults int) *Handler {
+func New(exec SearchExecutor, queryCache *cache.QueryCache, collector *analytics.Collector, m *metrics.Metrics, defaultLimit, maxResults int) *Handler {
 	return &Handler{
 		executor:     exec,
 		cache:        queryCache,
 		collector:    collector,
+		metrics:      m,
 		defaultLimit: defaultLimit,
 		maxResults:   maxResults,
 		logger:       slog.Default().With("component", "search-handler"),
 	}
 }
-
 func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	ctx := r.Context()
 	log := logger.FromContext(ctx)
+
+	requestID := middleware.GetRequestID(ctx)
+	ctx, span := tracing.StartSpan(ctx, "search", requestID)
+	defer func() {
+		span.End()
+		span.Log()
+	}()
 
 	query := r.URL.Query().Get("q")
 	if query == "" {
@@ -66,7 +76,12 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 		limit = parsed
 	}
 
+	_, parseSpan := tracing.StartChildSpan(ctx, "parse_query")
 	plan := parser.Parse(query)
+	parseSpan.SetAttr("terms", len(plan.Terms))
+	parseSpan.SetAttr("exclude_terms", len(plan.ExcludeTerms))
+	parseSpan.End()
+
 	if len(plan.Terms) == 0 {
 		h.writeJSON(w, http.StatusOK, &executor.SearchResult{
 			Query:   query,
@@ -80,20 +95,42 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 	cacheHit := false
 
 	if h.cache != nil {
+		_, cacheSpan := tracing.StartChildSpan(ctx, "cache_lookup")
 		result, cacheHit, err = h.cache.GetOrCompute(ctx, query, limit, func() (*executor.SearchResult, error) {
+			_, execSpan := tracing.StartChildSpan(ctx, "execute_query")
+			defer execSpan.End()
 			return h.executor.Execute(ctx, plan, limit)
 		})
+		cacheSpan.SetAttr("hit", cacheHit)
+		cacheSpan.End()
 	} else {
+		_, execSpan := tracing.StartChildSpan(ctx, "execute_query")
 		result, err = h.executor.Execute(ctx, plan, limit)
+		execSpan.End()
 	}
 
 	if err != nil {
 		log.Error("search execution failed", "query", query, "error", err)
+		h.recordSearchMetrics("error", false, 0, time.Since(start))
 		h.writeError(w, http.StatusInternalServerError, "search failed")
 		return
 	}
 
 	latencyMs := time.Since(start).Milliseconds()
+	duration := time.Since(start)
+
+	resultType := "hit"
+	if result.TotalHits == 0 {
+		resultType = "zero_result"
+	}
+
+	h.recordSearchMetrics(resultType, cacheHit, len(result.Results), duration)
+
+	span.SetAttr("query", query)
+	span.SetAttr("total_hits", result.TotalHits)
+	span.SetAttr("returned", len(result.Results))
+	span.SetAttr("cache_hit", cacheHit)
+	span.SetAttr("latency_ms", latencyMs)
 
 	log.Info("search completed",
 		"query", query,
@@ -102,6 +139,7 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 		"cache_hit", cacheHit,
 		"latency_ms", latencyMs,
 	)
+
 	if h.collector != nil {
 		eventType := analytics.EventCacheMiss
 		if cacheHit {
@@ -117,11 +155,30 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 			LatencyMs: latencyMs,
 			CacheHit:  cacheHit,
 			Timestamp: time.Now().UTC(),
-			RequestID: middleware.GetRequestID(ctx),
+			RequestID: requestID,
 		})
 	}
 
 	h.writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) recordSearchMetrics(resultType string, cacheHit bool, resultCount int, duration time.Duration) {
+	if h.metrics == nil {
+		return
+	}
+
+	h.metrics.SearchQueriesTotal.WithLabelValues(resultType).Inc()
+
+	cacheStatus := "miss"
+	if cacheHit {
+		cacheStatus = "hit"
+		h.metrics.CacheHitsTotal.Inc()
+	} else {
+		h.metrics.CacheMissesTotal.Inc()
+	}
+
+	h.metrics.SearchLatency.WithLabelValues(cacheStatus).Observe(duration.Seconds())
+	h.metrics.SearchResultsCount.WithLabelValues().Observe(float64(resultCount))
 }
 
 func (h *Handler) CacheStats(w http.ResponseWriter, r *http.Request) {
@@ -158,7 +215,6 @@ func (h *Handler) CacheInvalidate(w http.ResponseWriter, r *http.Request) {
 
 	h.writeJSON(w, http.StatusOK, map[string]string{"status": "invalidated"})
 }
-
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
