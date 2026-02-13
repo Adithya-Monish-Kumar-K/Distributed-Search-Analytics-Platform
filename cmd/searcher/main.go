@@ -15,7 +15,9 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/executor"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/handler"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/config"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/health"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/logger"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/middleware"
 	pkgredis "github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/redis"
 )
 
@@ -40,8 +42,10 @@ func main() {
 	}
 	defer router.Close()
 	slog.Info("shard router initialized", "data_dir", cfg.Indexer.DataDir)
+
 	var queryCache *cache.QueryCache
-	redisClient, err := pkgredis.NewClient(cfg.Redis)
+	var redisClient *pkgredis.Client
+	redisClient, err = pkgredis.NewClient(cfg.Redis)
 	if err != nil {
 		slog.Warn("redis unavailable, search caching disabled", "error", err)
 	} else {
@@ -52,18 +56,37 @@ func main() {
 			"ttl", cfg.Redis.CacheTTL,
 		)
 	}
+	checker := health.NewChecker()
+	checker.Register("index_engine", func(ctx context.Context) health.ComponentHealth {
+		if router.NumShards() > 0 {
+			return health.ComponentHealth{Status: health.StatusUp, Message: fmt.Sprintf("%d shards active", router.NumShards())}
+		}
+		return health.ComponentHealth{Status: health.StatusDown, Message: "no shards"}
+	})
+	checker.Register("redis", func(ctx context.Context) health.ComponentHealth {
+		if redisClient == nil {
+			return health.ComponentHealth{Status: health.StatusDegraded, Message: "not configured"}
+		}
+		if err := redisClient.Ping(ctx); err != nil {
+			return health.ComponentHealth{Status: health.StatusDegraded, Message: err.Error()}
+		}
+		return health.ComponentHealth{Status: health.StatusUp}
+	})
 	exec := executor.NewSharded(router.GetAllEngines())
 	h := handler.New(exec, queryCache, cfg.Search.DefaultLimit, cfg.Search.MaxResults)
-
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/search", h.Search)
 	mux.HandleFunc("GET /api/v1/cache/stats", h.CacheStats)
 	mux.HandleFunc("POST /api/v1/cache/invalidate", h.CacheInvalidate)
-	mux.HandleFunc("GET /health", h.Health)
+	mux.HandleFunc("GET /health/live", checker.LiveHandler())
+	mux.HandleFunc("GET /health/ready", checker.ReadyHandler())
+	var chain http.Handler = mux
+	chain = middleware.Timeout(cfg.Server.WriteTimeout)(chain)
+	chain = middleware.RequestID(chain)
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler:      mux,
+		Handler:      chain,
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,
 	}
