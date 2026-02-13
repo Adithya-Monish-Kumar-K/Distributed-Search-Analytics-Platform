@@ -7,35 +7,43 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/analytics"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/cache"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/executor"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/parser"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/ranker"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/logger"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/middleware"
 )
 
 type SearchExecutor interface {
 	Execute(ctx context.Context, plan *parser.QueryPlan, limit int) (*executor.SearchResult, error)
 }
+
 type Handler struct {
 	executor     SearchExecutor
 	cache        *cache.QueryCache
+	collector    *analytics.Collector
 	defaultLimit int
 	maxResults   int
 	logger       *slog.Logger
 }
 
-func New(exec SearchExecutor, queryCache *cache.QueryCache, defaultLimit, maxResults int) *Handler {
+func New(exec SearchExecutor, queryCache *cache.QueryCache, collector *analytics.Collector, defaultLimit, maxResults int) *Handler {
 	return &Handler{
 		executor:     exec,
 		cache:        queryCache,
+		collector:    collector,
 		defaultLimit: defaultLimit,
 		maxResults:   maxResults,
 		logger:       slog.Default().With("component", "search-handler"),
 	}
 }
+
 func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	ctx := r.Context()
 	log := logger.FromContext(ctx)
 
@@ -85,15 +93,37 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	latencyMs := time.Since(start).Milliseconds()
+
 	log.Info("search completed",
 		"query", query,
 		"total_hits", result.TotalHits,
 		"returned", len(result.Results),
 		"cache_hit", cacheHit,
+		"latency_ms", latencyMs,
 	)
+	if h.collector != nil {
+		eventType := analytics.EventCacheMiss
+		if cacheHit {
+			eventType = analytics.EventCacheHit
+		}
+
+		h.collector.Track(analytics.SearchEvent{
+			Type:      eventType,
+			Query:     query,
+			Terms:     plan.Terms,
+			TotalHits: result.TotalHits,
+			Returned:  len(result.Results),
+			LatencyMs: latencyMs,
+			CacheHit:  cacheHit,
+			Timestamp: time.Now().UTC(),
+			RequestID: middleware.GetRequestID(ctx),
+		})
+	}
 
 	h.writeJSON(w, http.StatusOK, result)
 }
+
 func (h *Handler) CacheStats(w http.ResponseWriter, r *http.Request) {
 	if h.cache == nil {
 		h.writeJSON(w, http.StatusOK, map[string]string{"status": "disabled"})
@@ -128,6 +158,7 @@ func (h *Handler) CacheInvalidate(w http.ResponseWriter, r *http.Request) {
 
 	h.writeJSON(w, http.StatusOK, map[string]string{"status": "invalidated"})
 }
+
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

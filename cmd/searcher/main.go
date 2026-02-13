@@ -10,12 +10,14 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/analytics"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/indexer/shard"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/cache"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/executor"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/handler"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/config"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/health"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/kafka"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/logger"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/middleware"
 	pkgredis "github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/redis"
@@ -42,7 +44,6 @@ func main() {
 	}
 	defer router.Close()
 	slog.Info("shard router initialized", "data_dir", cfg.Indexer.DataDir)
-
 	var queryCache *cache.QueryCache
 	var redisClient *pkgredis.Client
 	redisClient, err = pkgredis.NewClient(cfg.Redis)
@@ -56,6 +57,30 @@ func main() {
 			"ttl", cfg.Redis.CacheTTL,
 		)
 	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	var collector *analytics.Collector
+	analyticsProducer := kafka.NewProducer(cfg.Kafka, cfg.Kafka.Topics.AnalyticsEvents)
+	collector = analytics.NewCollector(analyticsProducer, 10000)
+	collector.Start(ctx)
+	defer collector.Close()
+	slog.Info("analytics collector started", "topic", cfg.Kafka.Topics.AnalyticsEvents)
+	analyticsHandler := analytics.HandleEvent(nil)
+	analyticsConsumer := kafka.NewConsumer(cfg.Kafka, cfg.Kafka.Topics.AnalyticsEvents, analyticsHandler)
+	aggregator := analytics.NewAggregator(analyticsConsumer)
+	analyticsHandler = analytics.HandleEvent(aggregator)
+	analyticsConsumer = kafka.NewConsumer(cfg.Kafka, cfg.Kafka.Topics.AnalyticsEvents, analytics.HandleEvent(aggregator))
+	aggregator = analytics.NewAggregator(analyticsConsumer)
+	analyticsH := analytics.NewHandler(aggregator)
+
+	go func() {
+		if err := aggregator.Start(ctx); err != nil {
+			slog.Error("analytics aggregator error", "error", err)
+		}
+	}()
+	slog.Info("analytics aggregator started")
+
 	checker := health.NewChecker()
 	checker.Register("index_engine", func(ctx context.Context) health.ComponentHealth {
 		if router.NumShards() > 0 {
@@ -72,14 +97,18 @@ func main() {
 		}
 		return health.ComponentHealth{Status: health.StatusUp}
 	})
+
 	exec := executor.NewSharded(router.GetAllEngines())
-	h := handler.New(exec, queryCache, cfg.Search.DefaultLimit, cfg.Search.MaxResults)
+	h := handler.New(exec, queryCache, collector, cfg.Search.DefaultLimit, cfg.Search.MaxResults)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/search", h.Search)
 	mux.HandleFunc("GET /api/v1/cache/stats", h.CacheStats)
 	mux.HandleFunc("POST /api/v1/cache/invalidate", h.CacheInvalidate)
+	mux.HandleFunc("GET /api/v1/analytics", analyticsH.Stats)
 	mux.HandleFunc("GET /health/live", checker.LiveHandler())
 	mux.HandleFunc("GET /health/ready", checker.ReadyHandler())
+
 	var chain http.Handler = mux
 	chain = middleware.Timeout(cfg.Server.WriteTimeout)(chain)
 	chain = middleware.RequestID(chain)
@@ -90,9 +119,6 @@ func main() {
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,
 	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	go func() {
 		<-ctx.Done()
