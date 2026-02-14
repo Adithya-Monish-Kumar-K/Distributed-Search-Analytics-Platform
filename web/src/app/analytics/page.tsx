@@ -164,7 +164,7 @@ export default function AnalyticsPage() {
                       fill="none"
                       stroke="#6366f1"
                       strokeWidth="3"
-                      strokeDasharray={`${data.cache_hit_rate * 100}, 100`}
+                      strokeDasharray={`${((data.cache_hit_rate ?? 0) * 100) || 0}, 100`}
                       strokeLinecap="round"
                     />
                   </svg>
@@ -191,7 +191,7 @@ export default function AnalyticsPage() {
                   <div className="flex justify-between">
                     <span className="text-gray-500">Total Queries</span>
                     <span className="font-semibold text-gray-900">
-                      {data.total_queries.toLocaleString()}
+                      {(data.total_queries ?? 0).toLocaleString()}
                     </span>
                   </div>
                 </div>
@@ -234,7 +234,7 @@ export default function AnalyticsPage() {
                           {q.query}
                         </td>
                         <td className="px-6 py-3 text-gray-600">
-                          {q.count.toLocaleString()}
+                          {(q.count ?? 0).toLocaleString()}
                         </td>
                         <td className="px-6 py-3 text-gray-600">
                           {(q.avg_latency_ms ?? 0).toFixed(1)}ms
@@ -245,12 +245,12 @@ export default function AnalyticsPage() {
                               <div
                                 className="h-full rounded-full bg-brand-500"
                                 style={{
-                                  width: `${(q.count / data.total_queries) * 100}%`,
+                                  width: `${((q.count ?? 0) / (data.total_queries || 1)) * 100}%`,
                                 }}
                               />
                             </div>
                             <span className="text-xs text-gray-400">
-                              {((q.count / (data.total_queries || 1)) * 100).toFixed(
+                              {(((q.count ?? 0) / (data.total_queries || 1)) * 100).toFixed(
                                 1,
                               )}
                               %

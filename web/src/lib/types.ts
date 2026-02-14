@@ -44,6 +44,8 @@ export interface IngestResponse {
 
 // ─── Analytics ──────────────────────────────────────────────
 
+// Normalised analytics data used by the UI.
+// The API transform layer maps the Go backend response into this shape.
 export interface AnalyticsData {
   total_queries: number;
   queries_per_second: number;
@@ -62,14 +64,42 @@ export interface TopQuery {
   avg_latency_ms: number;
 }
 
+// Raw shape returned by the Go backend GET /api/v1/analytics
+export interface RawAnalyticsResponse {
+  total_searches?: number;
+  total_docs_indexed?: number;
+  cache_hits?: number;
+  cache_misses?: number;
+  zero_result_count?: number;
+  avg_latency_ms?: number;
+  p50_latency_ms?: number;
+  p95_latency_ms?: number;
+  p99_latency_ms?: number;
+  top_queries?: { query: string; count: number }[];
+  zero_result_queries?: { query: string; count: number }[];
+  queries_per_minute?: number;
+}
+
 // ─── Cache ──────────────────────────────────────────────────
 
+// Normalised cache stats used by the UI.
 export interface CacheStats {
   hits: number;
   misses: number;
   hit_rate: number;
   size: number;
   evictions: number;
+}
+
+// Raw shape returned by the Go backend GET /api/v1/cache/stats
+export interface RawCacheStatsResponse {
+  hits?: number;
+  misses?: number;
+  total?: number;
+  hit_rate?: string; // e.g. "73.2%"
+  size?: number;
+  evictions?: number;
+  status?: string;   // "disabled" when cache is off
 }
 
 // ─── Health ─────────────────────────────────────────────────

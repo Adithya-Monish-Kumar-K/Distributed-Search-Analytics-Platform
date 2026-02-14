@@ -173,19 +173,19 @@ export default function CachePage() {
                 <div
                   className="flex items-center justify-center bg-emerald-500 text-xs font-medium text-white transition-all duration-500"
                   style={{
-                    width: `${stats.hit_rate * 100}%`,
+                    width: `${((stats.hit_rate ?? 0) * 100) || 0}%`,
                   }}
                 >
-                  {stats.hit_rate > 0.1 &&
+                  {(stats.hit_rate ?? 0) > 0.1 &&
                     `${((stats.hit_rate ?? 0) * 100).toFixed(0)}%`}
                 </div>
                 <div
                   className="flex items-center justify-center bg-amber-500 text-xs font-medium text-white transition-all duration-500"
                   style={{
-                    width: `${(1 - stats.hit_rate) * 100}%`,
+                    width: `${((1 - (stats.hit_rate ?? 0)) * 100) || 0}%`,
                   }}
                 >
-                  {1 - stats.hit_rate > 0.1 &&
+                  {(1 - (stats.hit_rate ?? 0)) > 0.1 &&
                     `${((1 - (stats.hit_rate ?? 0)) * 100).toFixed(0)}%`}
                 </div>
               </div>

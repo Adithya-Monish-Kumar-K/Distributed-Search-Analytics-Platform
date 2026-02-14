@@ -183,26 +183,26 @@ export default function DashboardPage() {
           <StatsCard
             title="Cache Hit Rate"
             value={
-              cache?.hit_rate != null
+              cache?.hit_rate != null && !isNaN(cache.hit_rate)
                 ? `${(cache.hit_rate * 100).toFixed(1)}%`
-                : analytics?.cache_hit_rate != null
+                : analytics?.cache_hit_rate != null && !isNaN(analytics.cache_hit_rate)
                   ? `${(analytics.cache_hit_rate * 100).toFixed(1)}%`
-                  : "—"
+                  : "0%"
             }
             icon={Database}
             color="emerald"
             subtitle={
               cache
-                ? `${cache.hits} hits / ${cache.misses} misses`
+                ? `${cache.hits ?? 0} hits / ${cache.misses ?? 0} misses`
                 : undefined
             }
           />
           <StatsCard
             title="Error Rate"
             value={
-              analytics?.error_rate != null
+              analytics?.error_rate != null && !isNaN(analytics.error_rate)
                 ? `${(analytics.error_rate * 100).toFixed(2)}%`
-                : "—"
+                : "0%"
             }
             icon={Activity}
             color={

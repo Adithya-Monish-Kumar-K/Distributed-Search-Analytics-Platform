@@ -9,6 +9,8 @@ import type {
   CreateApiKeyRequest,
   CreateApiKeyResponse,
   Document,
+  RawAnalyticsResponse,
+  RawCacheStatsResponse,
 } from "./types";
 
 // ─── Base fetcher ───────────────────────────────────────────
@@ -33,8 +35,20 @@ async function fetchJSON<T>(
   }
   const res = await fetch(url, { ...opts, headers });
   if (!res.ok) {
+    // Try to parse a JSON error body and extract a human-readable message
     const text = await res.text().catch(() => res.statusText);
-    throw new Error(`${res.status}: ${text}`);
+    let message = `${res.status}: ${text}`;
+    try {
+      const body = JSON.parse(text);
+      if (body.error) {
+        message = body.error;
+      } else if (body.status === "unavailable") {
+        message = `Service ${body.service ?? ""} is not reachable`;
+      }
+    } catch {
+      // text wasn't JSON, use as-is
+    }
+    throw new Error(message);
   }
   // Some endpoints return 202 with no meaningful JSON body
   if (res.status === 204 || res.headers.get("content-length") === "0") {
@@ -88,14 +102,60 @@ export async function getDocument(
 
 // ─── Analytics ──────────────────────────────────────────────
 
+/** Transform the raw Go backend response into the normalised AnalyticsData shape */
+function transformAnalytics(raw: RawAnalyticsResponse): AnalyticsData {
+  const cacheHits = raw.cache_hits ?? 0;
+  const cacheMisses = raw.cache_misses ?? 0;
+  const cacheTotal = cacheHits + cacheMisses;
+  const cacheHitRate = cacheTotal > 0 ? cacheHits / cacheTotal : 0;
+
+  return {
+    total_queries: raw.total_searches ?? 0,
+    queries_per_second: (raw.queries_per_minute ?? 0) / 60,
+    avg_latency_ms: raw.avg_latency_ms ?? 0,
+    p50_latency_ms: raw.p50_latency_ms ?? 0,
+    p95_latency_ms: raw.p95_latency_ms ?? 0,
+    p99_latency_ms: raw.p99_latency_ms ?? 0,
+    cache_hit_rate: cacheHitRate,
+    error_rate: 0, // backend doesn't track error rate yet
+    top_queries: (raw.top_queries ?? []).map((q) => ({
+      query: q.query ?? "",
+      count: q.count ?? 0,
+      avg_latency_ms: 0, // not tracked per-query by backend
+    })),
+  };
+}
+
 export async function getAnalytics(): Promise<AnalyticsData> {
-  return fetchJSON<AnalyticsData>(`${SEARCH_BASE}/api/v1/analytics`);
+  const raw = await fetchJSON<RawAnalyticsResponse>(`${SEARCH_BASE}/api/v1/analytics`);
+  return transformAnalytics(raw);
 }
 
 // ─── Cache ──────────────────────────────────────────────────
 
+/** Transform the raw Go backend response into the normalised CacheStats shape */
+function transformCacheStats(raw: RawCacheStatsResponse): CacheStats {
+  // The Go backend returns hit_rate as a formatted string like "73.2%"
+  let hitRate = 0;
+  if (typeof raw.hit_rate === "string") {
+    hitRate = parseFloat(raw.hit_rate.replace("%", "")) / 100;
+    if (isNaN(hitRate)) hitRate = 0;
+  } else if (typeof raw.hit_rate === "number") {
+    hitRate = raw.hit_rate;
+  }
+
+  return {
+    hits: raw.hits ?? 0,
+    misses: raw.misses ?? 0,
+    hit_rate: hitRate,
+    size: raw.size ?? (raw.total ?? 0),
+    evictions: raw.evictions ?? 0,
+  };
+}
+
 export async function getCacheStats(): Promise<CacheStats> {
-  return fetchJSON<CacheStats>(`${SEARCH_BASE}/api/v1/cache/stats`);
+  const raw = await fetchJSON<RawCacheStatsResponse>(`${SEARCH_BASE}/api/v1/cache/stats`);
+  return transformCacheStats(raw);
 }
 
 export async function invalidateCache(): Promise<void> {
@@ -115,15 +175,17 @@ export async function getHealth(
     gateway: GATEWAY_BASE,
   };
   const base = bases[service];
+
+  // Ingestion service only exposes GET /health (no /health/ready or /health/live)
+  if (service === "ingestion") {
+    return fetchJSON<HealthCheck>(`${base}/health`);
+  }
+
+  // Search & gateway have /health/ready and /health/live via the health.Checker
   try {
     return await fetchJSON<HealthCheck>(`${base}/health/ready`);
   } catch {
-    try {
-      return await fetchJSON<HealthCheck>(`${base}/health/live`);
-    } catch {
-      // ingestion uses /health
-      return fetchJSON<HealthCheck>(`${base}/health`);
-    }
+    return fetchJSON<HealthCheck>(`${base}/health/live`);
   }
 }
 
