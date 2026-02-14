@@ -13,9 +13,12 @@ import type {
 
 // ─── Base fetcher ───────────────────────────────────────────
 
-const SEARCH_BASE = "/api/search";
-const INGEST_BASE = "/api/ingest";
-const GATEWAY_BASE = "/api/gateway";
+// All requests route through the Next.js API proxy at /api/proxy/{service}/...
+// This avoids CORS issues and handles backend connection errors gracefully
+// instead of flooding the dev-server console with ECONNREFUSED stack traces.
+const SEARCH_BASE = "/api/proxy/search";
+const INGEST_BASE = "/api/proxy/ingest";
+const GATEWAY_BASE = "/api/proxy/gateway";
 
 async function fetchJSON<T>(
   url: string,
