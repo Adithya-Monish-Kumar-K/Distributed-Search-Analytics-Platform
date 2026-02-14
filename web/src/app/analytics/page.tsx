@@ -88,21 +88,21 @@ export default function AnalyticsPage() {
             />
             <StatsCard
               title="Throughput"
-              value={`${data.queries_per_second.toFixed(1)}/s`}
+              value={`${(data.queries_per_second ?? 0).toFixed(1)}/s`}
               icon={TrendingUp}
               color="emerald"
             />
             <StatsCard
               title="Avg Latency"
-              value={`${data.avg_latency_ms.toFixed(1)}ms`}
+              value={`${(data.avg_latency_ms ?? 0).toFixed(1)}ms`}
               icon={Clock}
               color="amber"
             />
             <StatsCard
               title="Error Rate"
-              value={`${(data.error_rate * 100).toFixed(2)}%`}
+              value={`${((data.error_rate ?? 0) * 100).toFixed(2)}%`}
               icon={AlertTriangle}
-              color={data.error_rate > 0.05 ? "red" : "emerald"}
+              color={(data.error_rate ?? 0) > 0.05 ? "red" : "emerald"}
             />
           </div>
 
@@ -118,8 +118,8 @@ export default function AnalyticsPage() {
                   { label: "P95", value: data.p95_latency_ms, color: "bg-amber-500" },
                   { label: "P99", value: data.p99_latency_ms, color: "bg-red-500" },
                 ].map(({ label, value, color }) => {
-                  const maxVal = Math.max(data.p99_latency_ms * 1.2, 1);
-                  const pct = (value / maxVal) * 100;
+                  const maxVal = Math.max((data.p99_latency_ms ?? 0) * 1.2, 1);
+                  const pct = ((value ?? 0) / maxVal) * 100;
                   return (
                     <div key={label}>
                       <div className="mb-1 flex items-center justify-between text-sm">
@@ -127,7 +127,7 @@ export default function AnalyticsPage() {
                           {label}
                         </span>
                         <span className="font-mono text-gray-900">
-                          {value.toFixed(2)}ms
+                          {(value ?? 0).toFixed(2)}ms
                         </span>
                       </div>
                       <div className="h-3 w-full overflow-hidden rounded-full bg-gray-100">
@@ -170,7 +170,7 @@ export default function AnalyticsPage() {
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
                     <span className="text-2xl font-bold text-gray-900">
-                      {(data.cache_hit_rate * 100).toFixed(0)}%
+                      {((data.cache_hit_rate ?? 0) * 100).toFixed(0)}%
                     </span>
                     <span className="text-xs text-gray-500">Hit Rate</span>
                   </div>
@@ -179,13 +179,13 @@ export default function AnalyticsPage() {
                   <div className="flex justify-between">
                     <span className="text-gray-500">Cache Hit Rate</span>
                     <span className="font-semibold text-gray-900">
-                      {(data.cache_hit_rate * 100).toFixed(1)}%
+                      {((data.cache_hit_rate ?? 0) * 100).toFixed(1)}%
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Queries Per Second</span>
                     <span className="font-semibold text-gray-900">
-                      {data.queries_per_second.toFixed(1)}
+                      {(data.queries_per_second ?? 0).toFixed(1)}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -237,7 +237,7 @@ export default function AnalyticsPage() {
                           {q.count.toLocaleString()}
                         </td>
                         <td className="px-6 py-3 text-gray-600">
-                          {q.avg_latency_ms.toFixed(1)}ms
+                          {(q.avg_latency_ms ?? 0).toFixed(1)}ms
                         </td>
                         <td className="px-6 py-3">
                           <div className="flex items-center gap-2">
@@ -250,7 +250,7 @@ export default function AnalyticsPage() {
                               />
                             </div>
                             <span className="text-xs text-gray-400">
-                              {((q.count / data.total_queries) * 100).toFixed(
+                              {((q.count / (data.total_queries || 1)) * 100).toFixed(
                                 1,
                               )}
                               %

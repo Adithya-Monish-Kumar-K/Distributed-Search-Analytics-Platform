@@ -125,9 +125,9 @@ export default function CachePage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatsCard
               title="Hit Rate"
-              value={`${(stats.hit_rate * 100).toFixed(1)}%`}
+              value={`${((stats.hit_rate ?? 0) * 100).toFixed(1)}%`}
               icon={Database}
-              color={stats.hit_rate > 0.5 ? "emerald" : "amber"}
+              color={(stats.hit_rate ?? 0) > 0.5 ? "emerald" : "amber"}
             />
             <StatsCard
               title="Cache Hits"
@@ -177,7 +177,7 @@ export default function CachePage() {
                   }}
                 >
                   {stats.hit_rate > 0.1 &&
-                    `${(stats.hit_rate * 100).toFixed(0)}%`}
+                    `${((stats.hit_rate ?? 0) * 100).toFixed(0)}%`}
                 </div>
                 <div
                   className="flex items-center justify-center bg-amber-500 text-xs font-medium text-white transition-all duration-500"
@@ -186,7 +186,7 @@ export default function CachePage() {
                   }}
                 >
                   {1 - stats.hit_rate > 0.1 &&
-                    `${((1 - stats.hit_rate) * 100).toFixed(0)}%`}
+                    `${((1 - (stats.hit_rate ?? 0)) * 100).toFixed(0)}%`}
                 </div>
               </div>
             </div>

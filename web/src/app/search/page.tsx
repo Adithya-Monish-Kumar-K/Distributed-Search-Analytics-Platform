@@ -148,7 +148,7 @@ export default function SearchPage() {
           </span>
           <span className="flex items-center gap-1">
             <Clock className="h-4 w-4" />
-            {results.took_ms.toFixed(1)}ms
+            {(results.took_ms ?? 0).toFixed(1)}ms
           </span>
           <span className="flex items-center gap-1">
             {results.cache_hit ? (
@@ -227,7 +227,7 @@ function ResultCard({ result, rank }: { result: SearchResult; rank: number }) {
         <div className="text-right">
           <div className="rounded-lg bg-brand-50 px-3 py-1.5">
             <span className="text-sm font-semibold text-brand-700">
-              {result.score.toFixed(3)}
+              {(result.score ?? 0).toFixed(3)}
             </span>
           </div>
           <p className="mt-1 text-xs text-gray-400">BM25 score</p>

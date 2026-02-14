@@ -160,7 +160,7 @@ export default function DashboardPage() {
             icon={Search}
             color="brand"
             subtitle={
-              analytics
+              analytics?.queries_per_second != null
                 ? `${analytics.queries_per_second.toFixed(1)} queries/sec`
                 : undefined
             }
@@ -168,12 +168,14 @@ export default function DashboardPage() {
           <StatsCard
             title="Avg Latency"
             value={
-              analytics ? `${analytics.avg_latency_ms.toFixed(1)}ms` : "—"
+              analytics?.avg_latency_ms != null
+                ? `${analytics.avg_latency_ms.toFixed(1)}ms`
+                : "—"
             }
             icon={Zap}
             color="amber"
             subtitle={
-              analytics
+              analytics?.p99_latency_ms != null
                 ? `P99: ${analytics.p99_latency_ms.toFixed(1)}ms`
                 : undefined
             }
@@ -181,9 +183,9 @@ export default function DashboardPage() {
           <StatsCard
             title="Cache Hit Rate"
             value={
-              cache
+              cache?.hit_rate != null
                 ? `${(cache.hit_rate * 100).toFixed(1)}%`
-                : analytics
+                : analytics?.cache_hit_rate != null
                   ? `${(analytics.cache_hit_rate * 100).toFixed(1)}%`
                   : "—"
             }
@@ -198,13 +200,15 @@ export default function DashboardPage() {
           <StatsCard
             title="Error Rate"
             value={
-              analytics
+              analytics?.error_rate != null
                 ? `${(analytics.error_rate * 100).toFixed(2)}%`
                 : "—"
             }
             icon={Activity}
             color={
-              analytics && analytics.error_rate > 0.05 ? "red" : "emerald"
+              analytics?.error_rate != null && analytics.error_rate > 0.05
+                ? "red"
+                : "emerald"
             }
           />
         </div>
@@ -226,7 +230,7 @@ export default function DashboardPage() {
                 <div key={label} className="text-center">
                   <p className="text-sm font-medium text-gray-500">{label}</p>
                   <p className="mt-1 text-2xl font-bold text-gray-900">
-                    {value.toFixed(1)}
+                    {(value ?? 0).toFixed(1)}
                     <span className="ml-1 text-sm font-normal text-gray-400">
                       ms
                     </span>
@@ -235,7 +239,7 @@ export default function DashboardPage() {
                     <div
                       className="h-full rounded-full bg-brand-500 transition-all"
                       style={{
-                        width: `${Math.min((value / analytics.p99_latency_ms) * 100, 100)}%`,
+                        width: `${Math.min(((value ?? 0) / (analytics.p99_latency_ms || 1)) * 100, 100)}%`,
                       }}
                     />
                   </div>
@@ -275,7 +279,7 @@ export default function DashboardPage() {
                     </td>
                     <td className="px-6 py-3 text-gray-600">{q.count}</td>
                     <td className="px-6 py-3 text-gray-600">
-                      {q.avg_latency_ms.toFixed(1)}ms
+                      {(q.avg_latency_ms ?? 0).toFixed(1)}ms
                     </td>
                   </tr>
                 ))}
