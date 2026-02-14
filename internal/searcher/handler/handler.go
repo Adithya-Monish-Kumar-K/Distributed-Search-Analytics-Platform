@@ -169,7 +169,13 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	h.writeJSON(w, http.StatusOK, result)
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"query":     result.Query,
+		"total":     result.TotalHits,
+		"results":   result.Results,
+		"took_ms":   float64(latencyMs),
+		"cache_hit": cacheHit,
+	})
 }
 
 // recordSearchMetrics updates Prometheus counters and histograms for the

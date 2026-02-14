@@ -11,6 +11,7 @@ import type {
   Document,
   RawAnalyticsResponse,
   RawCacheStatsResponse,
+  RawSearchResponse,
 } from "./types";
 
 // ─── Base fetcher ───────────────────────────────────────────
@@ -59,14 +60,32 @@ async function fetchJSON<T>(
 
 // ─── Search ─────────────────────────────────────────────────
 
+/** Transform the raw Go search response into the normalised SearchResponse shape */
+function transformSearchResponse(raw: RawSearchResponse): SearchResponse {
+  return {
+    query: raw.query ?? "",
+    total: raw.total ?? raw.total_hits ?? 0,
+    took_ms: raw.took_ms ?? 0,
+    cache_hit: raw.cache_hit ?? false,
+    results: (raw.results ?? []).map((r) => ({
+      id: r.doc_id ?? r.id ?? "",
+      title: r.title ?? "",
+      score: r.score ?? 0,
+      snippet: r.snippet,
+      shard_id: r.shard_id,
+    })),
+  };
+}
+
 export async function search(
   query: string,
   limit = 10,
 ): Promise<SearchResponse> {
   const params = new URLSearchParams({ q: query, limit: String(limit) });
-  return fetchJSON<SearchResponse>(
+  const raw = await fetchJSON<RawSearchResponse>(
     `${SEARCH_BASE}/api/v1/search?${params}`,
   );
+  return transformSearchResponse(raw);
 }
 
 // ─── Ingestion ──────────────────────────────────────────────

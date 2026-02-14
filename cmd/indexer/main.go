@@ -12,6 +12,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -24,6 +25,7 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/config"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/kafka"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/logger"
+	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/postgres"
 )
 
 // numShards is the fixed number of index shards matching the shard count in
@@ -51,6 +53,17 @@ func main() {
 		os.Exit(1)
 	}
 	defer router.Close()
+
+	// PostgreSQL — used to update document status after indexing.
+	db, err := postgres.New(cfg.Postgres)
+	if err != nil {
+		slog.Warn("postgres not available, document status will not be updated", "error", err)
+	}
+	if db != nil {
+		defer db.Close()
+		slog.Info("connected to postgres for status updates")
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -58,7 +71,11 @@ func main() {
 		engine.StartFlushLoop(ctx)
 		slog.Info("flush loop started", "shard_id", shardID)
 	}
-	handler := consumer.HandleMessageSharded(router)
+	var sqlDB *sql.DB
+	if db != nil {
+		sqlDB = db.DB
+	}
+	handler := consumer.HandleMessageSharded(router, sqlDB)
 	kafkaConsumer := kafka.NewConsumer(
 		cfg.Kafka,
 		cfg.Kafka.Topics.DocumentIngest,

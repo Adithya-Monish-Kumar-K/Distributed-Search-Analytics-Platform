@@ -25,10 +25,12 @@ var (
 
 // KeyInfo holds metadata about a validated API key.
 type KeyInfo struct {
-	ID        string
-	Name      string
-	RateLimit int
-	ExpiresAt *time.Time
+	ID        string     `json:"id"`
+	Name      string     `json:"name"`
+	RateLimit int        `json:"rate_limit"`
+	IsActive  bool       `json:"is_active"`
+	CreatedAt time.Time  `json:"created_at"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
 // Validator validates API keys against the api_keys table in PostgreSQL.
@@ -52,13 +54,16 @@ func (v *Validator) Validate(ctx context.Context, rawKey string) (*KeyInfo, erro
 
 	var info KeyInfo
 	var expiresAt sql.NullTime
+	var createdAt time.Time
 
 	err := v.db.DB.QueryRowContext(ctx,
-		`SELECT id, name, rate_limit, expires_at
+		`SELECT id, name, rate_limit, is_active, created_at, expires_at
 		 FROM api_keys
 		 WHERE key_hash = $1 AND is_active = true`,
 		hash,
-	).Scan(&info.ID, &info.Name, &info.RateLimit, &expiresAt)
+	).Scan(&info.ID, &info.Name, &info.RateLimit, &info.IsActive, &createdAt, &expiresAt)
+
+	info.CreatedAt = createdAt
 
 	if err == sql.ErrNoRows {
 		return nil, ErrInvalidKey
@@ -124,7 +129,7 @@ func (v *Validator) RevokeKey(ctx context.Context, rawKey string) error {
 // ListKeys returns all active API keys (without the raw key / hash).
 func (v *Validator) ListKeys(ctx context.Context) ([]KeyInfo, error) {
 	rows, err := v.db.DB.QueryContext(ctx,
-		`SELECT id, name, rate_limit, expires_at FROM api_keys WHERE is_active = true ORDER BY created_at DESC`,
+		`SELECT id, name, rate_limit, is_active, created_at, expires_at FROM api_keys WHERE is_active = true ORDER BY created_at DESC`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("listing api keys: %w", err)
@@ -135,7 +140,7 @@ func (v *Validator) ListKeys(ctx context.Context) ([]KeyInfo, error) {
 	for rows.Next() {
 		var k KeyInfo
 		var expiresAt sql.NullTime
-		if err := rows.Scan(&k.ID, &k.Name, &k.RateLimit, &expiresAt); err != nil {
+		if err := rows.Scan(&k.ID, &k.Name, &k.RateLimit, &k.IsActive, &k.CreatedAt, &expiresAt); err != nil {
 			return nil, fmt.Errorf("scanning api key row: %w", err)
 		}
 		if expiresAt.Valid {

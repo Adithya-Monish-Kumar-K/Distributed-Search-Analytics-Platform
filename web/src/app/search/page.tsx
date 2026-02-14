@@ -183,7 +183,7 @@ export default function SearchPage() {
             />
           ) : (
             results.results.map((result, index) => (
-              <ResultCard key={result.id} result={result} rank={index + 1} />
+              <ResultCard key={result.id || index} result={result} rank={index + 1} />
             ))
           )}
         </div>
@@ -220,8 +220,10 @@ function ResultCard({ result, rank }: { result: SearchResult; rank: number }) {
             </p>
           )}
           <div className="mt-3 flex items-center gap-3 text-xs text-gray-400">
-            <span className="font-mono">{result.id.slice(0, 8)}…</span>
-            <span>Shard {result.shard_id}</span>
+            {result.id && (
+              <span className="font-mono">{result.id.slice(0, 8)}…</span>
+            )}
+            {result.shard_id != null && <span>Shard {result.shard_id}</span>}
           </div>
         </div>
         <div className="text-right">

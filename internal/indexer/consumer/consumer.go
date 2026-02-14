@@ -5,6 +5,7 @@ package consumer
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 
@@ -36,7 +37,9 @@ func (ic *IndexConsumer) Start(ctx context.Context) error {
 
 // HandleMessageSharded returns a Kafka MessageHandler that routes each ingest
 // event to the correct shard engine via the Router before indexing.
-func HandleMessageSharded(router *shard.Router) kafka.MessageHandler {
+// If db is non-nil, the document status is updated from PENDING to INDEXED
+// in PostgreSQL after a successful index operation.
+func HandleMessageSharded(router *shard.Router, db *sql.DB) kafka.MessageHandler {
 	logger := slog.Default().With("component", "index-consumer")
 	return func(ctx context.Context, key []byte, value []byte) error {
 		event, err := kafka.DecodeJSON[ingestion.IngestEvent](value)
@@ -59,8 +62,11 @@ func HandleMessageSharded(router *shard.Router) kafka.MessageHandler {
 		)
 
 		if err := engine.IndexDocument(event.DocumentID, event.Title, event.Body); err != nil {
+			updateDocStatus(ctx, db, event.DocumentID, "FAILED", logger)
 			return fmt.Errorf("indexing document %s in shard %d: %w", event.DocumentID, event.ShardID, err)
 		}
+
+		updateDocStatus(ctx, db, event.DocumentID, "INDEXED", logger)
 
 		logger.Info("document indexed",
 			"doc_id", event.DocumentID,
@@ -72,7 +78,8 @@ func HandleMessageSharded(router *shard.Router) kafka.MessageHandler {
 
 // HandleMessage returns a Kafka MessageHandler that indexes every ingest
 // event into a single (non-sharded) Engine.
-func HandleMessage(engine *indexer.Engine) kafka.MessageHandler {
+// If db is non-nil, the document status is updated after indexing.
+func HandleMessage(engine *indexer.Engine, db *sql.DB) kafka.MessageHandler {
 	logger := slog.Default().With("component", "index-consumer")
 	return func(ctx context.Context, key []byte, value []byte) error {
 		event, err := kafka.DecodeJSON[ingestion.IngestEvent](value)
@@ -88,12 +95,35 @@ func HandleMessage(engine *indexer.Engine) kafka.MessageHandler {
 			"shard_id", event.ShardID,
 		)
 		if err := engine.IndexDocument(event.DocumentID, event.Title, event.Body); err != nil {
+			updateDocStatus(ctx, db, event.DocumentID, "FAILED", logger)
 			return fmt.Errorf("indexing document %s: %w", event.DocumentID, err)
 		}
+
+		updateDocStatus(ctx, db, event.DocumentID, "INDEXED", logger)
+
 		logger.Info("document indexed",
 			"doc_id", event.DocumentID,
 			"shard_id", event.ShardID,
 		)
 		return nil
+	}
+}
+
+// updateDocStatus updates the document's status and indexed_at timestamp in PostgreSQL.
+// If db is nil, the update is silently skipped.
+func updateDocStatus(ctx context.Context, db *sql.DB, docID, status string, logger *slog.Logger) {
+	if db == nil {
+		return
+	}
+	_, err := db.ExecContext(ctx,
+		`UPDATE documents SET status = $1, indexed_at = NOW() WHERE id = $2`,
+		status, docID,
+	)
+	if err != nil {
+		logger.Error("failed to update document status",
+			"doc_id", docID,
+			"status", status,
+			"error", err,
+		)
 	}
 }

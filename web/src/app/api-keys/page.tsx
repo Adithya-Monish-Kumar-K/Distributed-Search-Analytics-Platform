@@ -174,14 +174,16 @@ export default function ApiKeysPage() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {keys.map((key) => (
-                  <tr key={key.id} className="hover:bg-gray-50">
+                {keys.map((key, idx) => (
+                  <tr key={key.id ?? idx} className="hover:bg-gray-50">
                     <td className="px-6 py-4">
                       <div>
                         <p className="font-medium text-gray-900">{key.name}</p>
-                        <p className="mt-0.5 font-mono text-xs text-gray-400">
-                          {key.id.slice(0, 8)}…
-                        </p>
+                        {key.id && (
+                          <p className="mt-0.5 font-mono text-xs text-gray-400">
+                            {key.id.slice(0, 8)}…
+                          </p>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -272,7 +274,7 @@ function CreateKeyForm({
         { name, rate_limit: rateLimit, expires_in: expiresIn || undefined },
         apiKey || undefined,
       );
-      setCreatedKey(res.key);
+      setCreatedKey(res.api_key ?? res.key ?? "");
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to create API key",

@@ -106,11 +106,14 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
     volumes:
       - index-data:/data/index
     environment:
       SP_KAFKA_BROKERS: "kafka:9092"
       SP_INDEXER_DATADIR: "/data/index"
+      SP_POSTGRES_HOST: "postgres"
     networks:
       - searchplatform
     restart: unless-stopped

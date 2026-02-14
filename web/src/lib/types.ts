@@ -20,7 +20,7 @@ export interface SearchResult {
   title: string;
   score: number;
   snippet?: string;
-  shard_id: number;
+  shard_id?: number;
 }
 
 export interface SearchResponse {
@@ -29,6 +29,25 @@ export interface SearchResponse {
   took_ms: number;
   cache_hit: boolean;
   query: string;
+}
+
+// Raw shape returned by the Go search handler (before UI normalisation).
+export interface RawSearchResult {
+  doc_id?: string;
+  id?: string;
+  score?: number;
+  title?: string;
+  snippet?: string;
+  shard_id?: number;
+}
+
+export interface RawSearchResponse {
+  results?: RawSearchResult[];
+  total?: number;
+  total_hits?: number;
+  took_ms?: number;
+  cache_hit?: boolean;
+  query?: string;
 }
 
 export interface IngestRequest {
@@ -133,9 +152,11 @@ export interface CreateApiKeyRequest {
 }
 
 export interface CreateApiKeyResponse {
-  key: string;
-  id: string;
-  name: string;
+  key?: string;
+  api_key?: string;
+  id?: string;
+  name?: string;
+  message?: string;
 }
 
 // ─── Misc ───────────────────────────────────────────────────
