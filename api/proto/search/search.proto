@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package searchplatform.search;
+
+option go_package = "github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/proto/search";
+
+import "common/common.proto";
+
+// SearchService provides full-text search over indexed documents.
+service SearchService {
+  // Search executes a query and returns ranked results.
+  rpc Search (SearchRequest) returns (SearchResponse);
+
+  // Suggest returns query autocompletion candidates.
+  rpc Suggest (SuggestRequest) returns (SuggestResponse);
+}
+
+// SearchRequest contains the user's query and pagination.
+message SearchRequest {
+  string query = 1;
+  int32  limit = 2;
+}
+
+// SearchResponse is the ranked result set.
+message SearchResponse {
+  string                query      = 1;
+  int32                 total_hits = 2;
+  repeated SearchResult results    = 3;
+  int64                 latency_ms = 4;
+}
+
+// SearchResult is a single scored document in the result set.
+message SearchResult {
+  string doc_id = 1;
+  string title  = 2;
+  float  score  = 3;
+}
+
+// SuggestRequest contains a partial query prefix.
+message SuggestRequest {
+  string prefix    = 1;
+  int32  max_items = 2;
+}
+
+// SuggestResponse contains autocomplete candidates.
+message SuggestResponse {
+  repeated string suggestions = 1;
+}

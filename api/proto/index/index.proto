@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package searchplatform.index;
+
+option go_package = "github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/proto/index";
+
+// IndexService handles document indexing and index metadata queries.
+service IndexService {
+  // IndexDocument adds or updates a document in the inverted index.
+  rpc IndexDocument (IndexRequest) returns (IndexResponse);
+
+  // GetIndexStats returns shard-level index statistics.
+  rpc GetIndexStats (StatsRequest) returns (StatsResponse);
+
+  // FlushSegment forces a segment flush on the specified shard.
+  rpc FlushSegment (FlushRequest) returns (FlushResponse);
+}
+
+// IndexRequest contains the document to be indexed.
+message IndexRequest {
+  string document_id = 1;
+  string title       = 2;
+  string body        = 3;
+  int32  shard_id    = 4;
+}
+
+// IndexResponse confirms the indexing result.
+message IndexResponse {
+  bool   success = 1;
+  string message = 2;
+}
+
+// StatsRequest optionally filters by shard.
+message StatsRequest {
+  int32 shard_id = 1; // 0 = all shards
+}
+
+// StatsResponse contains index-level statistics.
+message StatsResponse {
+  int64               total_docs       = 1;
+  int64               total_segments   = 2;
+  int64               total_size_bytes = 3;
+  repeated ShardStats shards           = 4;
+}
+
+// ShardStats holds per-shard statistics.
+message ShardStats {
+  int32 shard_id     = 1;
+  int64 doc_count    = 2;
+  int64 segment_count = 3;
+  int64 size_bytes   = 4;
+}
+
+// FlushRequest triggers a flush on a shard.
+message FlushRequest {
+  int32 shard_id = 1;
+}
+
+// FlushResponse confirms the flush.
+message FlushResponse {
+  bool   success = 1;
+  string message = 2;
+}
