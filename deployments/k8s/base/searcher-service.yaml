@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: searcher
+  namespace: searchplatform
+  labels:
+    app: searcher
+    app.kubernetes.io/part-of: searchplatform
+spec:
+  type: ClusterIP
+  selector:
+    app: searcher
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+      protocol: TCP

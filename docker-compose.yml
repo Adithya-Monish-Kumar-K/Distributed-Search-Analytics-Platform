@@ -1,0 +1,152 @@
+services:
+  # ─── Infrastructure ───────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: sp-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - searchplatform
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: sp-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    networks:
+      - searchplatform
+
+  redis:
+    image: redis:7-alpine
+    container_name: sp-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - searchplatform
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: sp-postgres
+    environment:
+      POSTGRES_DB: searchplatform
+      POSTGRES_USER: searchplatform
+      POSTGRES_PASSWORD: localdev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./migrations/postgres/001_initial_schema.up.sql:/docker-entrypoint-initdb.d/001_schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U searchplatform"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - searchplatform
+
+  # ─── Application Services ─────────────────────────────────
+  ingestion:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.ingestion
+    container_name: sp-ingestion
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8081:8080"
+    environment:
+      SP_SERVER_PORT: "8080"
+      SP_KAFKA_BROKERS: "kafka:9092"
+      SP_POSTGRES_HOST: "postgres"
+    networks:
+      - searchplatform
+    restart: unless-stopped
+
+  indexer:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.indexer
+    container_name: sp-indexer
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - index-data:/data/index
+    environment:
+      SP_KAFKA_BROKERS: "kafka:9092"
+      SP_INDEXER_DATADIR: "/data/index"
+    networks:
+      - searchplatform
+    restart: unless-stopped
+
+  searcher:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile.searcher
+    container_name: sp-searcher
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    volumes:
+      - index-data:/data/index
+    environment:
+      SP_SERVER_PORT: "8080"
+      SP_KAFKA_BROKERS: "kafka:9092"
+      SP_REDIS_ADDR: "redis:6379"
+      SP_INDEXER_DATADIR: "/data/index"
+      SP_METRICS_PORT: "9090"
+    networks:
+      - searchplatform
+    restart: unless-stopped
+
+volumes:
+  zookeeper-data:
+  kafka-data:
+  redis-data:
+  postgres-data:
+  index-data:
+
+networks:
+  searchplatform:
+    driver: bridge

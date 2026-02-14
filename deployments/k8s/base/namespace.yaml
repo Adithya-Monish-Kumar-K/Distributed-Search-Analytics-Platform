@@ -1,0 +1,6 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: searchplatform
+  labels:
+    app.kubernetes.io/part-of: searchplatform

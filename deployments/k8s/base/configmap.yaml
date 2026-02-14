@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: searchplatform-config
+  namespace: searchplatform
+  labels:
+    app.kubernetes.io/part-of: searchplatform
+data:
+  config.yaml: |
+    server:
+      port: 8080
+      readTimeout: 30s
+      writeTimeout: 30s
+      shutdownTimeout: 15s
+
+    kafka:
+      brokers:
+        - kafka.searchplatform.svc.cluster.local:9092
+      consumerGroup: searchplatform
+      topics:
+        documentIngest: document.ingest
+        indexComplete: index.complete
+        cacheInvalidate: cache.invalidate
+        analyticsEvents: analytics.events
+
+    redis:
+      addr: redis.searchplatform.svc.cluster.local:6379
+      password: ""
+      db: 0
+      poolSize: 20
+      cacheTTL: 120s
+
+    indexer:
+      dataDir: /data/index
+      segmentMaxSize: 10485760
+      mergeInterval: 30s
+      flushInterval: 5s
+      maxSegmentsBeforeMerge: 5
+
+    search:
+      maxResults: 100
+      defaultLimit: 10
+      timeoutPerShard: 5s
+      maxConcurrentQueries: 200
+
+    logging:
+      level: info
+      format: json
+
+    tracing:
+      enabled: true
+      endpoint: otel-collector.observability.svc.cluster.local:4317
+      sampleRate: 0.1
+
+    metrics:
+      enabled: true
+      port: 9090

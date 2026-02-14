@@ -1,0 +1,26 @@
+# Build stage
+FROM golang:1.25-alpine AS builder
+
+RUN apk add --no-cache git ca-certificates
+
+WORKDIR /src
+
+COPY go.mod go.sum go.work go.work.sum ./
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /bin/searcher ./cmd/searcher
+
+# Runtime stage
+FROM scratch
+
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=builder /bin/searcher /bin/searcher
+COPY configs/docker.yaml /etc/searchplatform/config.yaml
+
+VOLUME ["/data/index"]
+
+EXPOSE 8080 9090
+
+ENTRYPOINT ["/bin/searcher", "-config", "/etc/searchplatform/config.yaml"]
