@@ -1,0 +1,617 @@
+openapi: "3.0.3"
+
+info:
+  title: Distributed Search & Analytics Platform API
+  description: |
+    Production-grade distributed search platform with document ingestion,
+    full-text search with BM25 ranking, caching, analytics, and API key
+    authentication.
+  version: "1.0.0"
+  contact:
+    name: Platform Engineering
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8082
+    description: Gateway (development)
+  - url: http://localhost:8080
+    description: Search service (direct)
+  - url: http://localhost:8081
+    description: Ingestion service (direct)
+
+tags:
+  - name: Documents
+    description: Document ingestion and retrieval
+  - name: Search
+    description: Full-text search queries
+  - name: Analytics
+    description: Platform analytics and statistics
+  - name: Cache
+    description: Query cache management
+  - name: Admin
+    description: API key and platform administration
+  - name: Health
+    description: Service health probes
+
+paths:
+  # ─── Documents ───────────────────────────────────────────────────────
+  /api/v1/documents:
+    post:
+      tags: [Documents]
+      summary: Ingest a document
+      description: |
+        Accepts a document for asynchronous indexing. Returns immediately
+        with status PENDING. Supply an idempotency key to prevent duplicates.
+      operationId: ingestDocument
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngestRequest"
+      responses:
+        "202":
+          description: Document accepted for indexing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Idempotency key conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+    get:
+      tags: [Documents]
+      summary: List documents
+      description: Returns a paginated list of document metadata.
+      operationId: listDocuments
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: Document list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/documents/{id}:
+    get:
+      tags: [Documents]
+      summary: Get a document by ID
+      description: Returns metadata for a single document.
+      operationId: getDocument
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Document found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ─── Search ──────────────────────────────────────────────────────────
+  /api/v1/search:
+    get:
+      tags: [Search]
+      summary: Full-text search
+      description: |
+        Executes a BM25-ranked full-text search across all shards.
+        Supports quoted phrases, term exclusion with `-`, and caching.
+      operationId: search
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query (supports `"phrase"` and `-exclude`)
+          schema:
+            type: string
+            minLength: 1
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  # ─── Analytics ───────────────────────────────────────────────────────
+  /api/v1/analytics:
+    get:
+      tags: [Analytics]
+      summary: Get aggregated analytics
+      description: |
+        Returns real-time aggregated search and indexing statistics
+        including latency percentiles, top queries, and cache hit rates.
+      operationId: getAnalytics
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Aggregated statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsStats"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ─── Cache ───────────────────────────────────────────────────────────
+  /api/v1/cache/stats:
+    get:
+      tags: [Cache]
+      summary: Get cache statistics
+      operationId: getCacheStats
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Cache statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CacheStats"
+
+  /api/v1/cache/invalidate:
+    post:
+      tags: [Cache]
+      summary: Invalidate query cache
+      operationId: invalidateCache
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Cache invalidated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: invalidated
+
+  # ─── Admin ───────────────────────────────────────────────────────────
+  /api/v1/admin/keys:
+    post:
+      tags: [Admin]
+      summary: Create a new API key
+      operationId: createApiKey
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateKeyRequest"
+      responses:
+        "201":
+          description: API key created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateKeyResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+    get:
+      tags: [Admin]
+      summary: List active API keys
+      operationId: listApiKeys
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Active API keys
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeyList"
+
+  # ─── Health ──────────────────────────────────────────────────────────
+  /health:
+    get:
+      tags: [Health]
+      summary: Gateway health
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /health/live:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      operationId: liveness
+      responses:
+        "200":
+          description: Alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: alive
+
+  /health/ready:
+    get:
+      tags: [Health]
+      summary: Readiness probe
+      operationId: readiness
+      responses:
+        "200":
+          description: Ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthReport"
+        "503":
+          description: Not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthReport"
+
+# ═══════════════════════════════════════════════════════════════════════
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication (also accepted via `Authorization: Bearer <key>`)
+
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Offset:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds to wait before retrying
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: "invalid request"
+
+    IngestRequest:
+      type: object
+      required: [title, body]
+      properties:
+        title:
+          type: string
+          maxLength: 1024
+          example: "Introduction to Distributed Systems"
+        body:
+          type: string
+          example: "A distributed system is a system whose components are located..."
+        idempotency_key:
+          type: string
+          maxLength: 255
+          description: Prevents duplicate ingestion
+          example: "doc-abc-v1"
+
+    IngestResponse:
+      type: object
+      properties:
+        document_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, INDEXING, INDEXED, FAILED]
+        shard_id:
+          type: integer
+
+    Document:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        content_hash:
+          type: string
+        content_size:
+          type: integer
+        shard_id:
+          type: integer
+        status:
+          type: string
+          enum: [PENDING, INDEXING, INDEXED, FAILED, DELETED]
+        created_at:
+          type: string
+          format: date-time
+        indexed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    DocumentList:
+      type: object
+      properties:
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/DocumentSummary"
+        count:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    DocumentSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        shard_id:
+          type: integer
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    SearchResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        total_hits:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"
+
+    SearchResult:
+      type: object
+      properties:
+        doc_id:
+          type: string
+        title:
+          type: string
+        score:
+          type: number
+          format: float
+
+    AnalyticsStats:
+      type: object
+      properties:
+        total_searches:
+          type: integer
+          format: int64
+        total_docs_indexed:
+          type: integer
+          format: int64
+        cache_hits:
+          type: integer
+          format: int64
+        cache_misses:
+          type: integer
+          format: int64
+        zero_result_count:
+          type: integer
+          format: int64
+        avg_latency_ms:
+          type: number
+          format: double
+        p50_latency_ms:
+          type: integer
+          format: int64
+        p95_latency_ms:
+          type: integer
+          format: int64
+        p99_latency_ms:
+          type: integer
+          format: int64
+        top_queries:
+          type: array
+          items:
+            $ref: "#/components/schemas/QueryCount"
+        zero_result_queries:
+          type: array
+          items:
+            $ref: "#/components/schemas/QueryCount"
+        queries_per_minute:
+          type: number
+          format: double
+
+    QueryCount:
+      type: object
+      properties:
+        query:
+          type: string
+        count:
+          type: integer
+          format: int64
+
+    CacheStats:
+      type: object
+      properties:
+        hits:
+          type: integer
+        misses:
+          type: integer
+        total:
+          type: integer
+        hit_rate:
+          type: string
+          example: "85.5%"
+
+    CreateKeyRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: "my-application"
+        rate_limit:
+          type: integer
+          default: 100
+          description: Requests per minute
+        expires_in:
+          type: string
+          description: "Go duration string, e.g. 720h"
+          example: "720h"
+
+    CreateKeyResponse:
+      type: object
+      properties:
+        api_key:
+          type: string
+          description: Store securely — shown only once
+        name:
+          type: string
+        message:
+          type: string
+
+    KeyList:
+      type: object
+      properties:
+        keys:
+          type: array
+          items:
+            $ref: "#/components/schemas/KeyInfo"
+        count:
+          type: integer
+
+    KeyInfo:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        rate_limit:
+          type: integer
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    HealthReport:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [up, down, degraded]
+        components:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              status:
+                type: string
+              message:
+                type: string
+              latency:
+                type: string
+        timestamp:
+          type: string
+          format: date-time
