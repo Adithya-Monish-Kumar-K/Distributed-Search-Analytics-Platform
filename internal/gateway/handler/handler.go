@@ -136,7 +136,7 @@ func (h *Handler) ListDocuments(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.DB.QueryContext(r.Context(),
-		`SELECT id, title, shard_id, status, created_at
+		`SELECT id, title, shard_id, status, content_size, created_at
 		 FROM documents ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
 		limit, offset,
 	)
@@ -148,17 +148,18 @@ func (h *Handler) ListDocuments(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type docSummary struct {
-		ID        string    `json:"id"`
-		Title     string    `json:"title"`
-		ShardID   int       `json:"shard_id"`
-		Status    string    `json:"status"`
-		CreatedAt time.Time `json:"created_at"`
+		ID          string    `json:"id"`
+		Title       string    `json:"title"`
+		ShardID     int       `json:"shard_id"`
+		Status      string    `json:"status"`
+		ContentSize int       `json:"content_size"`
+		CreatedAt   time.Time `json:"created_at"`
 	}
 
 	docs := make([]docSummary, 0)
 	for rows.Next() {
 		var d docSummary
-		if err := rows.Scan(&d.ID, &d.Title, &d.ShardID, &d.Status, &d.CreatedAt); err != nil {
+		if err := rows.Scan(&d.ID, &d.Title, &d.ShardID, &d.Status, &d.ContentSize, &d.CreatedAt); err != nil {
 			h.logger.Error("failed to scan document row", "error", err)
 			continue
 		}

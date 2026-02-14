@@ -93,6 +93,18 @@ func (r *Router) FlushAll() error {
 	return firstErr
 }
 
+// ReloadAll tells every shard engine to re-scan for newly flushed segments.
+// Returns the total number of new segments loaded across all shards.
+func (r *Router) ReloadAll() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	total := 0
+	for _, engine := range r.engines {
+		total += engine.ReloadSegments()
+	}
+	return total
+}
+
 // Close flushes and closes every shard engine.
 func (r *Router) Close() error {
 	r.mu.Lock()

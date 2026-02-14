@@ -248,6 +248,54 @@ func (e *Engine) loadExistingSegments() error {
 	return nil
 }
 
+// ReloadSegments re-scans the data directory for .spdx segment files and opens
+// any that are not already loaded. This allows a searcher process to pick up
+// segments flushed by a separate indexer process sharing the same data volume.
+func (e *Engine) ReloadSegments() int {
+	entries, err := os.ReadDir(e.cfg.DataDir)
+	if err != nil {
+		e.logger.Error("reload: failed to read data dir", "error", err)
+		return 0
+	}
+
+	// Collect names of segments already loaded.
+	e.readerMu.RLock()
+	known := make(map[string]struct{}, len(e.readers))
+	for _, r := range e.readers {
+		known[r.Name()] = struct{}{}
+	}
+	e.readerMu.RUnlock()
+
+	var newReaders []*segment.Reader
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".spdx") {
+			continue
+		}
+		if _, ok := known[entry.Name()]; ok {
+			continue
+		}
+		path := filepath.Join(e.cfg.DataDir, entry.Name())
+		reader, err := segment.OpenReader(path)
+		if err != nil {
+			e.logger.Error("reload: failed to open segment", "segment", entry.Name(), "error", err)
+			continue
+		}
+		newReaders = append(newReaders, reader)
+		e.logger.Info("hot-loaded new segment",
+			"segment", entry.Name(),
+			"terms", reader.Terms(),
+			"docs", reader.DocCount(),
+		)
+	}
+
+	if len(newReaders) > 0 {
+		e.readerMu.Lock()
+		e.readers = append(e.readers, newReaders...)
+		e.readerMu.Unlock()
+	}
+	return len(newReaders)
+}
+
 // deduplicatePostings merges duplicate docIDs, keeping the entry with the
 // highest frequency, and returns the result sorted by DocID.
 func deduplicatePostings(postings index.PostingList) index.PostingList {

@@ -93,10 +93,15 @@ export async function search(
 export async function ingestDocument(
   doc: IngestRequest,
 ): Promise<IngestResponse> {
-  return fetchJSON<IngestResponse>(`${INGEST_BASE}/api/v1/documents`, {
+  const raw = await fetchJSON<IngestResponse>(`${INGEST_BASE}/api/v1/documents`, {
     method: "POST",
     body: JSON.stringify(doc),
   });
+  // Normalise: Go returns "document_id", UI expects "id".
+  if (!raw.id && raw.document_id) {
+    raw.id = raw.document_id;
+  }
+  return raw;
 }
 
 // ─── Documents (via gateway) ────────────────────────────────

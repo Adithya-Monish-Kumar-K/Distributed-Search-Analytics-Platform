@@ -57,8 +57,10 @@ export interface IngestRequest {
 }
 
 export interface IngestResponse {
-  id: string;
+  id?: string;
+  document_id?: string;
   status: string;
+  shard_id?: number;
 }
 
 // ─── Analytics ──────────────────────────────────────────────

@@ -164,7 +164,11 @@ export default function DocumentsPage() {
                   </td>
                   <td className="px-6 py-4 text-gray-600">{doc.shard_id}</td>
                   <td className="px-6 py-4 text-gray-600">
-                    {doc.content_size} B
+                    {doc.content_size != null
+                      ? doc.content_size >= 1024
+                        ? `${(doc.content_size / 1024).toFixed(1)} KB`
+                        : `${doc.content_size} B`
+                      : "—"}
                   </td>
                   <td className="px-6 py-4 text-gray-500">
                     {timeAgo(doc.created_at)}

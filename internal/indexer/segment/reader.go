@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/indexer/index"
@@ -106,4 +107,9 @@ func (r *Reader) DocCount() uint32 {
 // Close releases the underlying file handle.
 func (r *Reader) Close() error {
 	return r.file.Close()
+}
+
+// Name returns the base file name (e.g. "seg_123456.spdx") of this segment.
+func (r *Reader) Name() string {
+	return filepath.Base(r.filePath)
 }

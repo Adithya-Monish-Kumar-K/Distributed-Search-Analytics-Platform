@@ -19,6 +19,7 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/analytics"
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/indexer/shard"
@@ -93,6 +94,24 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	// Periodically re-scan shard directories for segments flushed by the
+	// indexer process so that newly ingested documents become searchable
+	// without requiring a full restart.
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if n := router.ReloadAll(); n > 0 {
+					slog.Info("hot-reloaded new segments", "count", n)
+				}
+			}
+		}
+	}()
 
 	var collector *analytics.Collector
 	analyticsProducer := kafka.NewProducer(cfg.Kafka, cfg.Kafka.Topics.AnalyticsEvents)
