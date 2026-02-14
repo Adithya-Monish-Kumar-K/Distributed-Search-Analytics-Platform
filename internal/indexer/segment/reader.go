@@ -1,3 +1,8 @@
+// Package segment implements a custom binary segment file format (.spdx) for
+// persisting inverted-index data to disk. Each segment has a fixed-size header,
+// a postings region, a JSON dictionary, and a CRC32 footer. The Writer creates
+// new segments atomically, and the Reader provides random-access search over
+// them.
 package segment
 
 import (
@@ -10,6 +15,9 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/indexer/index"
 )
 
+// Reader provides read-only access to a single .spdx segment file. It
+// memory-maps the dictionary on open and performs random-access reads for
+// posting lists.
 type Reader struct {
 	file     *os.File
 	filePath string
@@ -18,6 +26,8 @@ type Reader struct {
 	postBase int64
 }
 
+// OpenReader opens an existing segment file, validates the magic bytes, and
+// loads the term dictionary into memory.
 func OpenReader(path string) (*Reader, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -62,6 +72,8 @@ func OpenReader(path string) (*Reader, error) {
 	}, nil
 }
 
+// Search performs a binary search over the term dictionary and reads the
+// matching PostingList from disk.
 func (r *Reader) Search(term string) (index.PostingList, error) {
 	idx := sort.Search(len(r.dict), func(i int) bool {
 		return r.dict[i].Term >= term
@@ -81,14 +93,17 @@ func (r *Reader) Search(term string) (index.PostingList, error) {
 	return postings, nil
 }
 
+// Terms returns the number of unique terms stored in this segment.
 func (r *Reader) Terms() int {
 	return len(r.dict)
 }
 
+// DocCount returns the number of unique documents stored in this segment.
 func (r *Reader) DocCount() uint32 {
 	return r.header.DocCount
 }
 
+// Close releases the underlying file handle.
 func (r *Reader) Close() error {
 	return r.file.Close()
 }

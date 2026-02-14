@@ -1,3 +1,6 @@
+// Package kafka provides Kafka producer and consumer clients backed by
+// segmentio/kafka-go. The producer serialises events as JSON, while the
+// consumer decodes them via a pluggable MessageHandler callback.
 package kafka
 
 import (
@@ -10,14 +13,18 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
+// MessageHandler is a callback invoked for each Kafka message.
 type MessageHandler func(ctx context.Context, key []byte, value []byte) error
 
+// Consumer reads messages from a Kafka topic and dispatches them to a
+// MessageHandler.
 type Consumer struct {
 	reader  *kafka.Reader
 	logger  *slog.Logger
 	handler MessageHandler
 }
 
+// NewConsumer creates a Consumer for the given topic and handler.
 func NewConsumer(cfg config.KafkaConfig, topic string, handler MessageHandler) *Consumer {
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:     cfg.Brokers,
@@ -35,6 +42,8 @@ func NewConsumer(cfg config.KafkaConfig, topic string, handler MessageHandler) *
 	}
 }
 
+// Start enters the consume loop, fetching and processing messages until ctx
+// is cancelled.
 func (c *Consumer) Start(ctx context.Context) error {
 	c.logger.Info("consumer started")
 	for {
@@ -77,10 +86,12 @@ func (c *Consumer) Start(ctx context.Context) error {
 	}
 }
 
+// Close closes the underlying Kafka reader.
 func (c *Consumer) Close() error {
 	return c.reader.Close()
 }
 
+// DecodeJSON is a generic helper that unmarshals a Kafka message value into T.
 func DecodeJSON[T any](value []byte) (T, error) {
 	var result T
 	if err := json.Unmarshal(value, &result); err != nil {

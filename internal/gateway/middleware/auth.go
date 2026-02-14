@@ -1,3 +1,5 @@
+// Package middleware provides HTTP middleware for the API gateway including
+// authentication, CORS, and rate limiting.
 package middleware
 
 import (
@@ -55,6 +57,8 @@ func GetKeyInfo(ctx context.Context) *apikey.KeyInfo {
 	return info
 }
 
+// extractAPIKey reads the API key from the request in priority order:
+// Authorization: Bearer header, X-API-Key header, api_key query parameter.
 func extractAPIKey(r *http.Request) string {
 	// 1. Authorization: Bearer <key>
 	if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
@@ -68,6 +72,7 @@ func extractAPIKey(r *http.Request) string {
 	return r.URL.Query().Get("api_key")
 }
 
+// writeError writes a JSON error response to the client.
 func writeError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

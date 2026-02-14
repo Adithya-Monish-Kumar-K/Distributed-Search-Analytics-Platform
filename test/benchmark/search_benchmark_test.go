@@ -13,6 +13,8 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/config"
 )
 
+// BenchmarkQueryParse measures query parsing latency for queries of varying
+// complexity.
 func BenchmarkQueryParse(b *testing.B) {
 	queries := []struct {
 		name  string
@@ -37,6 +39,8 @@ func BenchmarkQueryParse(b *testing.B) {
 	}
 }
 
+// BenchmarkBM25Ranking measures BM25 scoring and sorting for different
+// posting-list sizes.
 func BenchmarkBM25Ranking(b *testing.B) {
 	sizes := []int{100, 1000, 10000}
 	for _, numDocs := range sizes {
@@ -71,6 +75,8 @@ func BenchmarkBM25Ranking(b *testing.B) {
 	}
 }
 
+// BenchmarkBM25MultiTerm measures BM25 ranking with an increasing number of
+// query terms.
 func BenchmarkBM25MultiTerm(b *testing.B) {
 	termCount := []int{1, 3, 5, 10}
 	for _, tc := range termCount {
@@ -107,6 +113,8 @@ func BenchmarkBM25MultiTerm(b *testing.B) {
 	}
 }
 
+// BenchmarkShardedExecutor exercises the sharded query executor with varying
+// shard counts.
 func BenchmarkShardedExecutor(b *testing.B) {
 	shardCounts := []int{1, 4, 8}
 	for _, numShards := range shardCounts {
@@ -148,6 +156,8 @@ func BenchmarkShardedExecutor(b *testing.B) {
 	}
 }
 
+// BenchmarkShardedExecutorParallel measures concurrent sharded search
+// throughput across 8 shards.
 func BenchmarkShardedExecutorParallel(b *testing.B) {
 	engines := make(map[int]*indexer.Engine)
 	for s := 0; s < 8; s++ {

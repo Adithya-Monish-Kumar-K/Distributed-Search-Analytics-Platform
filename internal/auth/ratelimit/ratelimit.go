@@ -1,3 +1,6 @@
+// Package ratelimit provides an in-memory token-bucket rate limiter.
+// Each key is assigned a bucket that refills proportionally over a
+// configurable window. Stale buckets are cleaned up periodically.
 package ratelimit
 
 import (

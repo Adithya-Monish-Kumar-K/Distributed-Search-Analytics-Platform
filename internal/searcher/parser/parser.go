@@ -1,3 +1,6 @@
+// Package parser converts raw search query strings into structured QueryPlan
+// objects, recognising AND, OR, and NOT operators and delegating token
+// normalisation to the indexer tokenizer.
 package parser
 
 import (
@@ -6,6 +9,7 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/indexer/tokenizer"
 )
 
+// QueryType indicates the Boolean combination mode for query terms.
 type QueryType int
 
 const (
@@ -13,6 +17,8 @@ const (
 	QueryOR
 )
 
+// QueryPlan is the parsed representation of a search query, containing the
+// include terms, exclude terms, Boolean type, and the original query string.
 type QueryPlan struct {
 	Terms        []string
 	Type         QueryType
@@ -20,6 +26,8 @@ type QueryPlan struct {
 	RawQuery     string
 }
 
+// Parse tokenises the query string and produces a QueryPlan. Operators AND,
+// OR, and NOT are recognised case-insensitively.
 func Parse(query string) *QueryPlan {
 	plan := &QueryPlan{
 		Terms:        make([]string, 0),

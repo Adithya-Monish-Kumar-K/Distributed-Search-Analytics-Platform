@@ -1,3 +1,14 @@
+// Command auth is a CLI tool for managing gateway API keys stored in PostgreSQL.
+//
+// Sub-commands:
+//
+//	auth create  --name "my-app" [--rate-limit 100] [--expires-in 720h]
+//	auth revoke  --key <raw-key>
+//	auth list
+//
+// Usage:
+//
+//	go run ./cmd/auth create --name "my-app" --rate-limit 100
 package main
 
 import (
@@ -14,13 +25,8 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/postgres"
 )
 
-// auth is a CLI tool for managing API keys.
-//
-// Usage:
-//
-//	auth create  --name "my-app" [--rate-limit 100] [--expires-in 720h]
-//	auth revoke  --key <raw-key>
-//	auth list
+// main parses the sub-command (create|revoke|list), connects to PostgreSQL via
+// the shared config, and dispatches to the appropriate handler function.
 func main() {
 	configPath := flag.String("config", "configs/development.yaml", "path to config file")
 	flag.Parse()
@@ -63,6 +69,8 @@ func main() {
 	}
 }
 
+// cmdCreate creates a new API key and prints it to stdout. The key is randomly
+// generated, SHA-256 hashed for storage, and can optionally have an expiry.
 func cmdCreate(ctx context.Context, v *apikey.Validator, args []string) {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 	name := fs.String("name", "", "name for the api key")
@@ -105,6 +113,7 @@ func cmdCreate(ctx context.Context, v *apikey.Validator, args []string) {
 	}
 }
 
+// cmdRevoke revokes an existing API key by its raw value.
 func cmdRevoke(ctx context.Context, v *apikey.Validator, args []string) {
 	fs := flag.NewFlagSet("revoke", flag.ExitOnError)
 	key := fs.String("key", "", "raw api key to revoke")
@@ -123,6 +132,7 @@ func cmdRevoke(ctx context.Context, v *apikey.Validator, args []string) {
 	fmt.Println("API key revoked successfully.")
 }
 
+// cmdList prints all active (non-revoked, non-expired) API keys in a table.
 func cmdList(ctx context.Context, v *apikey.Validator) {
 	keys, err := v.ListKeys(ctx)
 	if err != nil {
@@ -148,6 +158,7 @@ func cmdList(ctx context.Context, v *apikey.Validator) {
 	fmt.Printf("\nTotal: %d active key(s)\n", len(keys))
 }
 
+// printUsage prints the CLI help text to stderr.
 func printUsage() {
 	fmt.Fprintln(os.Stderr, "Usage: auth <command> [flags]")
 	fmt.Fprintln(os.Stderr, "")

@@ -1,3 +1,5 @@
+// Package handler exposes the search service HTTP endpoints including query
+// execution, cache management, and health checks.
 package handler
 
 import (
@@ -20,10 +22,12 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/tracing"
 )
 
+// SearchExecutor abstracts single-shard and sharded query execution.
 type SearchExecutor interface {
 	Execute(ctx context.Context, plan *parser.QueryPlan, limit int) (*executor.SearchResult, error)
 }
 
+// Handler serves the search service HTTP API.
 type Handler struct {
 	executor     SearchExecutor
 	cache        *cache.QueryCache
@@ -34,6 +38,8 @@ type Handler struct {
 	logger       *slog.Logger
 }
 
+// New creates a Handler with the given executor, cache, analytics collector,
+// metrics recorder, and result-limit settings.
 func New(exec SearchExecutor, queryCache *cache.QueryCache, collector *analytics.Collector, m *metrics.Metrics, defaultLimit, maxResults int) *Handler {
 	return &Handler{
 		executor:     exec,
@@ -45,6 +51,10 @@ func New(exec SearchExecutor, queryCache *cache.QueryCache, collector *analytics
 		logger:       slog.Default().With("component", "search-handler"),
 	}
 }
+
+// Search handles GET /api/v1/search?q=&limit=. It parses the query,
+// optionally checks the cache, executes the plan, records metrics and
+// analytics, and writes the JSON result.
 func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	ctx := r.Context()
@@ -162,6 +172,8 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, result)
 }
 
+// recordSearchMetrics updates Prometheus counters and histograms for the
+// completed search.
 func (h *Handler) recordSearchMetrics(resultType string, cacheHit bool, resultCount int, duration time.Duration) {
 	if h.metrics == nil {
 		return
@@ -181,6 +193,7 @@ func (h *Handler) recordSearchMetrics(resultType string, cacheHit bool, resultCo
 	h.metrics.SearchResultsCount.WithLabelValues().Observe(float64(resultCount))
 }
 
+// CacheStats returns current cache hit/miss counts and hit rate.
 func (h *Handler) CacheStats(w http.ResponseWriter, r *http.Request) {
 	if h.cache == nil {
 		h.writeJSON(w, http.StatusOK, map[string]string{"status": "disabled"})
@@ -201,6 +214,8 @@ func (h *Handler) CacheStats(w http.ResponseWriter, r *http.Request) {
 		"hit_rate": fmt.Sprintf("%.1f%%", hitRate),
 	})
 }
+
+// CacheInvalidate flushes all cached search results.
 func (h *Handler) CacheInvalidate(w http.ResponseWriter, r *http.Request) {
 	if h.cache == nil {
 		h.writeError(w, http.StatusServiceUnavailable, "caching is disabled")
@@ -215,10 +230,13 @@ func (h *Handler) CacheInvalidate(w http.ResponseWriter, r *http.Request) {
 
 	h.writeJSON(w, http.StatusOK, map[string]string{"status": "invalidated"})
 }
+
+// Health returns a simple health-check response.
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// writeJSON serialises data as JSON and writes it with the given status code.
 func (h *Handler) writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -227,6 +245,7 @@ func (h *Handler) writeJSON(w http.ResponseWriter, status int, data any) {
 	}
 }
 
+// writeError writes a JSON error response.
 func (h *Handler) writeError(w http.ResponseWriter, status int, message string) {
 	h.writeJSON(w, status, map[string]string{"error": message})
 }

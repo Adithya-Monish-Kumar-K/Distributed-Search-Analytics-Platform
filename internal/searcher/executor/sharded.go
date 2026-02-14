@@ -12,6 +12,7 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/ranker"
 )
 
+// ShardResult holds the raw postings and metadata returned by a single shard.
 type ShardResult struct {
 	ShardID   int
 	Postings  map[string]index.PostingList
@@ -20,11 +21,14 @@ type ShardResult struct {
 	Engine    *indexer.Engine
 }
 
+// ShardedExecutor fans out a query across multiple shard engines in parallel
+// and merges the results.
 type ShardedExecutor struct {
 	engines map[int]*indexer.Engine
 	logger  *slog.Logger
 }
 
+// NewSharded creates a ShardedExecutor over the given set of shard engines.
 func NewSharded(engines map[int]*indexer.Engine) *ShardedExecutor {
 	return &ShardedExecutor{
 		engines: engines,
@@ -32,6 +36,8 @@ func NewSharded(engines map[int]*indexer.Engine) *ShardedExecutor {
 	}
 }
 
+// Execute fans out the query to every shard, merges postings, applies Boolean
+// filtering and BM25 ranking, and returns the top-limit results.
 func (se *ShardedExecutor) Execute(ctx context.Context, plan *parser.QueryPlan, limit int) (*SearchResult, error) {
 	if len(plan.Terms) == 0 {
 		return &SearchResult{
@@ -131,6 +137,7 @@ func (se *ShardedExecutor) Execute(ctx context.Context, plan *parser.QueryPlan, 
 	}, nil
 }
 
+// fanOut queries all shards concurrently and collects their results.
 func (se *ShardedExecutor) fanOut(ctx context.Context, plan *parser.QueryPlan) ([]ShardResult, error) {
 	type result struct {
 		sr  ShardResult

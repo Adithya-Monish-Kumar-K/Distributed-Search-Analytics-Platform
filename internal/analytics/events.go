@@ -2,6 +2,7 @@ package analytics
 
 import "time"
 
+// EventType identifies the kind of analytics event.
 type EventType string
 
 const (
@@ -12,6 +13,8 @@ const (
 	EventZeroResult EventType = "zero_result"
 )
 
+// SearchEvent is emitted by the search handler after each query and records
+// the query text, result count, latency, cache status, and shard count.
 type SearchEvent struct {
 	Type       EventType `json:"type"`
 	Query      string    `json:"query"`
@@ -25,6 +28,7 @@ type SearchEvent struct {
 	RequestID  string    `json:"request_id"`
 }
 
+// IndexEvent is emitted after a document is indexed into a shard.
 type IndexEvent struct {
 	Type       EventType `json:"type"`
 	DocumentID string    `json:"document_id"`

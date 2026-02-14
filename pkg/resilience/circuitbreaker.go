@@ -1,3 +1,5 @@
+// Package resilience provides fault-tolerance primitives: a circuit breaker,
+// exponential-backoff retry, and a context-based timeout wrapper.
 package resilience
 
 import (
@@ -8,8 +10,10 @@ import (
 	"time"
 )
 
+// ErrCircuitOpen is returned when the circuit breaker is in the Open state.
 var ErrCircuitOpen = errors.New("circuit breaker is open")
 
+// State represents the current phase of a circuit breaker.
 type State int
 
 const (
@@ -31,6 +35,7 @@ func (s State) String() string {
 	}
 }
 
+// CircuitBreakerConfig controls failure thresholds and recovery timing.
 type CircuitBreakerConfig struct {
 	FailureThreshold    int
 	ResetTimeout        time.Duration
@@ -45,6 +50,9 @@ func defaultCBConfig() CircuitBreakerConfig {
 	}
 }
 
+// CircuitBreaker tracks consecutive failures and trips open when the
+// threshold is exceeded. After a cool-down period it transitions to
+// half-open and allows a probe request.
 type CircuitBreaker struct {
 	name                string
 	cfg                 CircuitBreakerConfig
@@ -56,6 +64,8 @@ type CircuitBreaker struct {
 	halfOpenRequests    int
 }
 
+// NewCircuitBreaker creates a CircuitBreaker with the given config, filling
+// in defaults for zero values.
 func NewCircuitBreaker(name string, cfg CircuitBreakerConfig) *CircuitBreaker {
 	defaults := defaultCBConfig()
 	if cfg.FailureThreshold <= 0 {
@@ -75,6 +85,7 @@ func NewCircuitBreaker(name string, cfg CircuitBreakerConfig) *CircuitBreaker {
 	}
 }
 
+// Execute runs fn if the circuit allows it, recording success or failure.
 func (cb *CircuitBreaker) Execute(fn func() error) error {
 	if err := cb.beforeRequest(); err != nil {
 		return err
@@ -84,6 +95,7 @@ func (cb *CircuitBreaker) Execute(fn func() error) error {
 	return err
 }
 
+// GetState returns the current State of the circuit breaker.
 func (cb *CircuitBreaker) GetState() State {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
@@ -153,6 +165,7 @@ func (cb *CircuitBreaker) onFailure() {
 	}
 }
 
+// Reset forces the circuit breaker back to the Closed state.
 func (cb *CircuitBreaker) Reset() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()

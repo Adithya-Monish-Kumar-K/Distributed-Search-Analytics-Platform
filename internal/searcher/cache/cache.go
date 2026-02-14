@@ -1,3 +1,6 @@
+// Package cache provides a Redis-backed query cache with singleflight
+// deduplication. Queries are normalised and hashed so that semantically
+// identical searches share the same cache entry.
 package cache
 
 import (
@@ -18,6 +21,8 @@ import (
 
 const keyPrefix = "search:"
 
+// QueryCache wraps a Redis client with singleflight de-duplication and
+// hit/miss counters.
 type QueryCache struct {
 	client *pkgredis.Client
 	cfg    config.RedisConfig
@@ -27,6 +32,7 @@ type QueryCache struct {
 	misses atomic.Int64
 }
 
+// New creates a QueryCache backed by the given Redis client.
 func New(client *pkgredis.Client, cfg config.RedisConfig) *QueryCache {
 	return &QueryCache{
 		client: client,
@@ -35,6 +41,7 @@ func New(client *pkgredis.Client, cfg config.RedisConfig) *QueryCache {
 	}
 }
 
+// Get reads a cached search result. Returns (nil, false) on miss or error.
 func (c *QueryCache) Get(ctx context.Context, query string, limit int) (*executor.SearchResult, bool) {
 	key := c.buildKey(query, limit)
 	data, err := c.client.Get(ctx, key)
@@ -58,6 +65,7 @@ func (c *QueryCache) Get(ctx context.Context, query string, limit int) (*executo
 	return &result, true
 }
 
+// Set stores a search result in the cache with the configured TTL.
 func (c *QueryCache) Set(ctx context.Context, query string, limit int, result *executor.SearchResult) {
 	key := c.buildKey(query, limit)
 	data, err := json.Marshal(result)
@@ -70,6 +78,9 @@ func (c *QueryCache) Set(ctx context.Context, query string, limit int, result *e
 	}
 }
 
+// GetOrCompute returns a cached result if available; otherwise invokes
+// computeFn, caches the outcome, and returns it. A singleflight group
+// prevents thundering-herd cache-miss storms.
 func (c *QueryCache) GetOrCompute(
 	ctx context.Context,
 	query string,
@@ -97,6 +108,7 @@ func (c *QueryCache) GetOrCompute(
 	return val.(*executor.SearchResult), false, nil
 }
 
+// Invalidate flushes all search-cache keys from Redis.
 func (c *QueryCache) Invalidate(ctx context.Context) error {
 	pattern := keyPrefix + "*"
 	deleted, err := c.client.FlushByPattern(ctx, pattern)
@@ -107,10 +119,13 @@ func (c *QueryCache) Invalidate(ctx context.Context) error {
 	return nil
 }
 
+// Stats returns the cumulative hit and miss counters.
 func (c *QueryCache) Stats() (hits, misses int64) {
 	return c.hits.Load(), c.misses.Load()
 }
 
+// buildKey produces a deterministic SHA-256 cache key for the normalised
+// query and limit.
 func (c *QueryCache) buildKey(query string, limit int) string {
 	normalized := normalizeQuery(query)
 	raw := fmt.Sprintf("%s:limit=%d", normalized, limit)
@@ -118,6 +133,8 @@ func (c *QueryCache) buildKey(query string, limit int) string {
 	return fmt.Sprintf("%s%x", keyPrefix, hash[:16])
 }
 
+// normalizeQuery canonicalises a query string by lower-casing, extracting
+// terms and excludes, sorting them, and joining with a separator.
 func normalizeQuery(query string) string {
 	words := strings.Fields(strings.ToLower(query))
 	terms := make([]string, 0)

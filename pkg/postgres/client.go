@@ -1,3 +1,6 @@
+// Package postgres provides a thin wrapper around database/sql with
+// connection-pool configuration, health-check support, and a transactional
+// helper (InTx).
 package postgres
 
 import (
@@ -10,11 +13,14 @@ import (
 	_ "github.com/lib/pq"
 )
 
+// Client manages a PostgreSQL connection pool.
 type Client struct {
 	DB  *sql.DB
 	cfg config.PostgresConfig
 }
 
+// New opens a PostgreSQL connection pool, configures its limits, and pings
+// the server to verify connectivity.
 func New(cfg config.PostgresConfig) (*Client, error) {
 	db, err := sql.Open("postgres", cfg.DSN())
 	if err != nil {
@@ -33,10 +39,13 @@ func New(cfg config.PostgresConfig) (*Client, error) {
 	return &Client{DB: db, cfg: cfg}, nil
 }
 
+// Close releases the database connection pool.
 func (c *Client) Close() error {
 	return c.DB.Close()
 }
 
+// InTx executes fn inside a database transaction. On error the transaction is
+// rolled back; on success it is committed.
 func (c *Client) InTx(ctx context.Context, fn func(tx *sql.Tx) error) error {
 	tx, err := c.DB.BeginTx(ctx, nil)
 	if err != nil {

@@ -1,3 +1,14 @@
+// Command gateway starts the API gateway service.
+//
+// The gateway is the single entry point for external clients. It authenticates
+// requests via API keys (SHA-256 validated against PostgreSQL), applies
+// per-key rate limiting, and proxies requests to the ingestion and search
+// services. It also exposes admin endpoints for API key management and a
+// direct document-retrieval endpoint backed by PostgreSQL.
+//
+// Usage:
+//
+//	go run ./cmd/gateway [-config configs/development.yaml]
 package main
 
 import (
@@ -20,6 +31,9 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/postgres"
 )
 
+// main initialises PostgreSQL, the API-key validator, the rate limiter, the
+// gateway handler + router middleware chain, and starts the HTTP server.
+// Graceful shutdown is triggered by SIGINT/SIGTERM.
 func main() {
 	configPath := flag.String("config", "configs/development.yaml", "path to config file")
 	flag.Parse()

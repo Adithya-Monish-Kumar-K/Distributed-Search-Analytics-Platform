@@ -1,3 +1,6 @@
+// Package validator provides input validation for ingestion requests. It
+// enforces title and body length constraints and returns per-field error
+// details.
 package validator
 
 import (
@@ -13,6 +16,7 @@ const (
 	minBodyLength  = 1
 )
 
+// ValidationError holds per-field validation failure messages.
 type ValidationError struct {
 	Fields map[string]string
 }
@@ -25,6 +29,8 @@ func (e *ValidationError) Error() string {
 	return strings.Join(parts, "; ")
 }
 
+// ValidateIngestRequest checks that the title and body of the request meet
+// the required length constraints and returns a ValidationError if not.
 func ValidateIngestRequest(req *ingestion.IngestRequest) error {
 	errs := make(map[string]string)
 

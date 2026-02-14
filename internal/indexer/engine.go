@@ -1,3 +1,7 @@
+// Package indexer implements the core indexing engine. It maintains an
+// in-memory inverted index backed by on-disk segments that are periodically
+// flushed. Searches fan out across the memory index and all segment readers,
+// and results are deduplicated before being returned.
 package indexer
 
 import (
@@ -17,6 +21,9 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/config"
 )
 
+// Engine is the primary indexing data structure. It buffers documents in a
+// MemoryIndex and flushes them to immutable on-disk segments when the
+// configured size threshold is reached.
 type Engine struct {
 	memIndex     *index.MemoryIndex
 	writer       *segment.Writer
@@ -30,6 +37,8 @@ type Engine struct {
 	totalTokens  int64
 }
 
+// NewEngine creates a new Engine, creating the data directory if necessary
+// and loading any previously-flushed segments from disk.
 func NewEngine(cfg config.IndexerConfig) (*Engine, error) {
 	if err := os.MkdirAll(cfg.DataDir, 0755); err != nil {
 		return nil, fmt.Errorf("creating index data directory: %w", err)
@@ -47,6 +56,8 @@ func NewEngine(cfg config.IndexerConfig) (*Engine, error) {
 	return e, nil
 }
 
+// IndexDocument tokenises the document and adds it to the memory index.
+// If the memory index exceeds SegmentMaxSize the buffer is flushed to disk.
 func (e *Engine) IndexDocument(docID string, title string, body string) error {
 	fullText := title + " " + body
 	tokens := tokenizer.Tokenize(fullText)
@@ -75,6 +86,8 @@ func (e *Engine) IndexDocument(docID string, title string, body string) error {
 	return nil
 }
 
+// Flush writes the current memory index snapshot to a new on-disk segment
+// and opens a reader for it.
 func (e *Engine) Flush() error {
 	snapshot := e.memIndex.Snapshot()
 	if len(snapshot) == 0 {
@@ -103,6 +116,8 @@ func (e *Engine) Flush() error {
 	return nil
 }
 
+// Search tokenises the query term, queries the memory index and all segment
+// readers, and returns deduplicated postings.
 func (e *Engine) Search(term string) (index.PostingList, error) {
 	tokens := tokenizer.Tokenize(term)
 	if len(tokens) == 0 {
@@ -129,12 +144,14 @@ func (e *Engine) Search(term string) (index.PostingList, error) {
 	return allPostings, nil
 }
 
+// GetDocLength returns the token count for the given document.
 func (e *Engine) GetDocLength(docID string) int {
 	e.docLengthsMu.RLock()
 	defer e.docLengthsMu.RUnlock()
 	return e.docLengths[docID]
 }
 
+// GetAvgDocLength returns the average document length across all indexed docs.
 func (e *Engine) GetAvgDocLength() float64 {
 	e.docLengthsMu.RLock()
 	defer e.docLengthsMu.RUnlock()
@@ -144,12 +161,15 @@ func (e *Engine) GetAvgDocLength() float64 {
 	return float64(e.totalTokens) / float64(e.totalDocs)
 }
 
+// GetTotalDocs returns the total number of documents indexed by this engine.
 func (e *Engine) GetTotalDocs() int64 {
 	e.docLengthsMu.RLock()
 	defer e.docLengthsMu.RUnlock()
 	return e.totalDocs
 }
 
+// StartFlushLoop starts a background goroutine that flushes the memory index
+// at the configured interval. It performs a final flush when ctx is cancelled.
 func (e *Engine) StartFlushLoop(ctx context.Context) {
 	ticker := time.NewTicker(e.cfg.FlushInterval)
 	go func() {
@@ -173,6 +193,7 @@ func (e *Engine) StartFlushLoop(ctx context.Context) {
 	}()
 }
 
+// Close flushes any remaining data and closes all segment readers.
 func (e *Engine) Close() error {
 	if err := e.Flush(); err != nil {
 		e.logger.Error("final flush on close failed", "error", err)
@@ -188,6 +209,8 @@ func (e *Engine) Close() error {
 	return nil
 }
 
+// loadExistingSegments scans the data directory for .spdx segment files and
+// opens a Reader for each one, restoring the index to its pre-restart state.
 func (e *Engine) loadExistingSegments() error {
 	entries, err := os.ReadDir(e.cfg.DataDir)
 	if err != nil {
@@ -225,6 +248,8 @@ func (e *Engine) loadExistingSegments() error {
 	return nil
 }
 
+// deduplicatePostings merges duplicate docIDs, keeping the entry with the
+// highest frequency, and returns the result sorted by DocID.
 func deduplicatePostings(postings index.PostingList) index.PostingList {
 	if len(postings) <= 1 {
 		return postings

@@ -1,3 +1,5 @@
+// Package middleware provides reusable HTTP middleware for request IDs,
+// Prometheus metrics, and request timeouts.
 package middleware
 
 import (
@@ -8,6 +10,8 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/metrics"
 )
 
+// Metrics returns middleware that records HTTP request count, latency, and
+// in-flight gauge.
 func Metrics(m *metrics.Metrics) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -36,6 +40,7 @@ func Metrics(m *metrics.Metrics) func(http.Handler) http.Handler {
 	}
 }
 
+// statusWriter wraps http.ResponseWriter to capture the response status code.
 type statusWriter struct {
 	http.ResponseWriter
 	status      int
@@ -56,6 +61,9 @@ func (sw *statusWriter) Write(b []byte) (int, error) {
 	}
 	return sw.ResponseWriter.Write(b)
 }
+
+// normalizePath returns the path as-is; can be extended to collapse
+// path parameters.
 func normalizePath(path string) string {
 	return path
 }

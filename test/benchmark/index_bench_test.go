@@ -1,3 +1,5 @@
+// Package benchmark contains Go benchmarks for the indexer engine, memory
+// index, and search pipeline, measuring throughput and allocation behaviour.
 package benchmark
 
 import (
@@ -9,6 +11,8 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/config"
 )
 
+// BenchmarkMemoryIndexAdd measures per-document insert throughput into the
+// in-memory inverted index.
 func BenchmarkMemoryIndexAdd(b *testing.B) {
 	mi := index.NewMemoryIndex()
 	b.ReportAllocs()
@@ -19,6 +23,8 @@ func BenchmarkMemoryIndexAdd(b *testing.B) {
 	}
 }
 
+// BenchmarkMemoryIndexSearch measures single-term lookup latency over 10 000
+// documents.
 func BenchmarkMemoryIndexSearch(b *testing.B) {
 	mi := index.NewMemoryIndex()
 	for i := 0; i < 10000; i++ {
@@ -34,6 +40,7 @@ func BenchmarkMemoryIndexSearch(b *testing.B) {
 	}
 }
 
+// BenchmarkMemoryIndexSearchParallel measures concurrent read throughput.
 func BenchmarkMemoryIndexSearchParallel(b *testing.B) {
 	mi := index.NewMemoryIndex()
 	for i := 0; i < 10000; i++ {
@@ -51,6 +58,8 @@ func BenchmarkMemoryIndexSearchParallel(b *testing.B) {
 	})
 }
 
+// BenchmarkMemoryIndexSnapshot measures the cost of snapshotting the index
+// before a segment flush.
 func BenchmarkMemoryIndexSnapshot(b *testing.B) {
 	mi := index.NewMemoryIndex()
 	for i := 0; i < 5000; i++ {
@@ -66,6 +75,8 @@ func BenchmarkMemoryIndexSnapshot(b *testing.B) {
 	}
 }
 
+// BenchmarkEngineIndex measures full engine indexing throughput at various
+// pre-loaded corpus sizes.
 func BenchmarkEngineIndex(b *testing.B) {
 	sizes := []int{100, 1000, 5000}
 	for _, preload := range sizes {
@@ -99,6 +110,8 @@ func BenchmarkEngineIndex(b *testing.B) {
 	}
 }
 
+// BenchmarkEngineSearch measures end-to-end search latency across 10 000
+// documents.
 func BenchmarkEngineSearch(b *testing.B) {
 	cfg := config.IndexerConfig{
 		DataDir:        b.TempDir(),

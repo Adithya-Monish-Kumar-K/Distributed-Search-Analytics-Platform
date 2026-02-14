@@ -11,16 +11,20 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
+// Event is the unit of data published to Kafka. Key is used for partition
+// hashing and Value is JSON-serialised.
 type Event struct {
 	Key   string
 	Value any
 }
 
+// Producer publishes JSON-encoded events to a Kafka topic.
 type Producer struct {
 	writer *kafka.Writer
 	logger *slog.Logger
 }
 
+// NewProducer creates a Producer for the given topic.
 func NewProducer(cfg config.KafkaConfig, topic string) *Producer {
 	w := &kafka.Writer{
 		Addr:         kafka.TCP(cfg.Brokers...),
@@ -38,6 +42,7 @@ func NewProducer(cfg config.KafkaConfig, topic string) *Producer {
 	}
 }
 
+// Publish serialises a single event and writes it to Kafka synchronously.
 func (p *Producer) Publish(ctx context.Context, event Event) error {
 	value, err := json.Marshal(event.Value)
 	if err != nil {
@@ -62,6 +67,7 @@ func (p *Producer) Publish(ctx context.Context, event Event) error {
 	return nil
 }
 
+// PublishBatch writes multiple events to Kafka in a single write call.
 func (p *Producer) PublishBatch(ctx context.Context, events []Event) error {
 	messages := make([]kafka.Message, 0, len(events))
 	for _, event := range events {
@@ -85,6 +91,7 @@ func (p *Producer) PublishBatch(ctx context.Context, events []Event) error {
 	return nil
 }
 
+// Close flushes pending writes and closes the underlying Kafka writer.
 func (p *Producer) Close() error {
 	return p.writer.Close()
 }

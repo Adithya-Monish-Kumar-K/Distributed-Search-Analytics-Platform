@@ -1,3 +1,6 @@
+// Package consumer reads ingestion events from Kafka and indexes them
+// via the indexer engine, optionally routing documents through the shard
+// router for partitioned indexing.
 package consumer
 
 import (
@@ -11,21 +14,28 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/kafka"
 )
 
+// IndexConsumer wraps a Kafka consumer to drive the indexing pipeline.
 type IndexConsumer struct {
 	consumer *kafka.Consumer
 	logger   *slog.Logger
 }
 
+// New creates an IndexConsumer backed by the given Kafka consumer.
 func New(kafkaConsumer *kafka.Consumer) *IndexConsumer {
 	return &IndexConsumer{
 		consumer: kafkaConsumer,
 		logger:   slog.Default().With("component", "index-consumer"),
 	}
 }
+
+// Start begins consuming Kafka messages. It blocks until ctx is cancelled.
 func (ic *IndexConsumer) Start(ctx context.Context) error {
 	ic.logger.Info("index consumer starting")
 	return ic.consumer.Start(ctx)
 }
+
+// HandleMessageSharded returns a Kafka MessageHandler that routes each ingest
+// event to the correct shard engine via the Router before indexing.
 func HandleMessageSharded(router *shard.Router) kafka.MessageHandler {
 	logger := slog.Default().With("component", "index-consumer")
 	return func(ctx context.Context, key []byte, value []byte) error {
@@ -59,6 +69,9 @@ func HandleMessageSharded(router *shard.Router) kafka.MessageHandler {
 		return nil
 	}
 }
+
+// HandleMessage returns a Kafka MessageHandler that indexes every ingest
+// event into a single (non-sharded) Engine.
 func HandleMessage(engine *indexer.Engine) kafka.MessageHandler {
 	logger := slog.Default().With("component", "index-consumer")
 	return func(ctx context.Context, key []byte, value []byte) error {

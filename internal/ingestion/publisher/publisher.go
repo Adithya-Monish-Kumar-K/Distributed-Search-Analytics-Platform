@@ -1,3 +1,6 @@
+// Package publisher persists documents to PostgreSQL and publishes ingest
+// events to Kafka for downstream indexing. It performs content-hash-based
+// shard assignment and supports idempotent writes.
 package publisher
 
 import (
@@ -15,14 +18,17 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/postgres"
 )
 
+// totalShards is the fixed number of index shards used for partitioning.
 const totalShards = 8
 
+// Publisher coordinates document persistence and Kafka event production.
 type Publisher struct {
 	db       *postgres.Client
 	producer *kafka.Producer
 	logger   *slog.Logger
 }
 
+// New creates a Publisher with the given database and Kafka producer.
 func New(db *postgres.Client, producer *kafka.Producer) *Publisher {
 	return &Publisher{
 		db:       db,
@@ -31,6 +37,9 @@ func New(db *postgres.Client, producer *kafka.Producer) *Publisher {
 	}
 }
 
+// Ingest persists the document in PostgreSQL, assigns a shard, and publishes
+// an IngestEvent to Kafka. Duplicate idempotency keys are detected and
+// returned without re-insertion.
 func (p *Publisher) Ingest(ctx context.Context, req *ingestion.IngestRequest) (*ingestion.IngestResponse, error) {
 	contentHash := fmt.Sprintf("%x", sha256.Sum256([]byte(req.Body)))
 	if req.IdempotencyKey != "" {
@@ -90,6 +99,8 @@ func (p *Publisher) Ingest(ctx context.Context, req *ingestion.IngestRequest) (*
 	}, nil
 }
 
+// findByIdempotencyKey checks if a document with the given idempotency key
+// already exists and returns its status.
 func (p *Publisher) findByIdempotencyKey(ctx context.Context, key string) (*ingestion.IngestResponse, error) {
 	var resp ingestion.IngestResponse
 	err := p.db.DB.QueryRowContext(ctx,
@@ -103,6 +114,7 @@ func (p *Publisher) findByIdempotencyKey(ctx context.Context, key string) (*inge
 	return &resp, nil
 }
 
+// assignShard deterministically maps a content hash to a shard ID.
 func assignShard(contentHash string, numShards int) int {
 	var hash uint64
 	for i := 0; i < 8 && i < len(contentHash); i++ {
@@ -111,6 +123,8 @@ func assignShard(contentHash string, numShards int) int {
 	return int(hash % uint64(numShards))
 }
 
+// nullableString converts a Go string to a sql.NullString, treating the
+// empty string as NULL.
 func nullableString(s string) sql.NullString {
 	if s == "" {
 		return sql.NullString{}

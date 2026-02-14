@@ -1,3 +1,6 @@
+// Package tracing provides a lightweight span-based tracing system that
+// propagates trace context through Go contexts. Spans form parent–child trees
+// and are logged as structured JSON via slog.
 package tracing
 
 import (
@@ -11,6 +14,7 @@ type contextKey string
 
 const spanKey contextKey = "trace_span"
 
+// Span represents a timed operation within a trace.
 type Span struct {
 	Name      string
 	TraceID   string
@@ -22,6 +26,7 @@ type Span struct {
 	mu        sync.Mutex
 }
 
+// StartSpan creates a new root span and stores it in the returned context.
 func StartSpan(ctx context.Context, name string, traceID string) (context.Context, *Span) {
 	span := &Span{
 		Name:      name,
@@ -33,6 +38,7 @@ func StartSpan(ctx context.Context, name string, traceID string) (context.Contex
 	return context.WithValue(ctx, spanKey, span), span
 }
 
+// StartChildSpan creates a child span linked to the parent in ctx.
 func StartChildSpan(ctx context.Context, name string) (context.Context, *Span) {
 	parent := SpanFromContext(ctx)
 	child := &Span{
@@ -52,17 +58,20 @@ func StartChildSpan(ctx context.Context, name string) (context.Context, *Span) {
 	return context.WithValue(ctx, spanKey, child), child
 }
 
+// End records the span's end time and duration.
 func (s *Span) End() {
 	s.EndTime = time.Now()
 	s.Duration = s.EndTime.Sub(s.StartTime)
 }
 
+// SetAttr attaches a key-value attribute to the span.
 func (s *Span) SetAttr(key string, value any) {
 	s.mu.Lock()
 	s.Attrs[key] = value
 	s.mu.Unlock()
 }
 
+// SpanFromContext extracts the current Span from ctx, or nil if none.
 func SpanFromContext(ctx context.Context) *Span {
 	if span, ok := ctx.Value(spanKey).(*Span); ok {
 		return span
@@ -70,10 +79,12 @@ func SpanFromContext(ctx context.Context) *Span {
 	return nil
 }
 
+// Log writes the span tree to slog.
 func (s *Span) Log() {
 	s.logRecursive(0)
 }
 
+// logRecursive recursively logs spans with increasing depth.
 func (s *Span) logRecursive(depth int) {
 	attrs := []any{
 		"trace_id", s.TraceID,

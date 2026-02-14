@@ -1,3 +1,7 @@
+// Package apikey provides SHA-256-based API key validation against PostgreSQL.
+// Raw keys are generated with crypto/rand, hashed before storage, and validated
+// by comparing the hash of the presented key with the stored hash. Keys can
+// be created, revoked, and listed.
 package apikey
 
 import (
@@ -148,6 +152,8 @@ func HashKey(raw string) string {
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(raw)))
 }
 
+// generateRawKey returns a cryptographically random 32-byte hex-encoded string
+// suitable for use as an API key.
 func generateRawKey() string {
 	b := make([]byte, 32)
 	_, _ = rand.Read(b)

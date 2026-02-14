@@ -1,3 +1,5 @@
+// Package metrics defines the Prometheus metric collectors used across the
+// platform and exposes an HTTP handler for scraping.
 package metrics
 
 import (
@@ -7,6 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+// Metrics holds all Prometheus collectors for the platform.
 type Metrics struct {
 	HTTPRequestsTotal    *prometheus.CounterVec
 	HTTPRequestDuration  *prometheus.HistogramVec
@@ -23,6 +26,7 @@ type Metrics struct {
 	CircuitBreakerState  *prometheus.GaugeVec
 }
 
+// New creates and registers all Prometheus metrics.
 func New() *Metrics {
 	m := &Metrics{
 		HTTPRequestsTotal: prometheus.NewCounterVec(
@@ -134,6 +138,8 @@ func New() *Metrics {
 
 	return m
 }
+
+// Handler returns the Prometheus scrape HTTP handler.
 func Handler() http.Handler {
 	return promhttp.Handler()
 }

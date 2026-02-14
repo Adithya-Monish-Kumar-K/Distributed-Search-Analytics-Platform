@@ -1,3 +1,5 @@
+// Package handler exposes the HTTP endpoints for the ingestion service,
+// including document ingest and health check.
 package handler
 
 import (
@@ -13,11 +15,13 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/logger"
 )
 
+// Handler serves HTTP requests for the ingestion API.
 type Handler struct {
 	publisher *publisher.Publisher
 	logger    *slog.Logger
 }
 
+// New creates a Handler backed by the given Publisher.
 func New(pub *publisher.Publisher) *Handler {
 	return &Handler{
 		publisher: pub,
@@ -25,6 +29,8 @@ func New(pub *publisher.Publisher) *Handler {
 	}
 }
 
+// Ingest validates the incoming request, publishes the document, and returns
+// the initial status.
 func (h *Handler) Ingest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.FromContext(ctx)
@@ -63,10 +69,12 @@ func (h *Handler) Ingest(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusAccepted, resp)
 }
 
+// Health returns a simple health-check response.
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// writeJSON serialises data as JSON and writes it with the given status code.
 func (h *Handler) writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -75,6 +83,7 @@ func (h *Handler) writeJSON(w http.ResponseWriter, status int, data any) {
 	}
 }
 
+// writeError writes a JSON error response.
 func (h *Handler) writeError(w http.ResponseWriter, status int, message string) {
 	h.writeJSON(w, status, map[string]string{"error": message})
 }

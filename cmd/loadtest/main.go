@@ -1,3 +1,12 @@
+// Command loadtest runs an HTTP load test against the search service.
+//
+// It sends concurrent search queries for a configurable duration and prints a
+// detailed report including request counts, error rate, latency percentiles
+// (P50/P90/P95/P99), standard deviation, and status code distribution.
+//
+// Usage:
+//
+//	go run ./cmd/loadtest [-url http://localhost:8080] [-concurrency 10] [-duration 30s]
 package main
 
 import (
@@ -15,6 +24,7 @@ import (
 	"time"
 )
 
+// Config holds load test parameters parsed from command-line flags.
 type Config struct {
 	BaseURL     string
 	Concurrency int
@@ -22,6 +32,8 @@ type Config struct {
 	Queries     []string
 }
 
+// Stats collects thread-safe request statistics during the load test run.
+// Latencies are appended under a mutex; counters use atomic operations.
 type Stats struct {
 	totalRequests atomic.Int64
 	successCount  atomic.Int64
@@ -33,6 +45,7 @@ type Stats struct {
 	statusCodesMu sync.Mutex
 }
 
+// NewStats creates an empty Stats collector.
 func NewStats() *Stats {
 	return &Stats{
 		latencies:   make([]time.Duration, 0, 100000),
@@ -40,6 +53,8 @@ func NewStats() *Stats {
 	}
 }
 
+// RecordRequest records the outcome of a single HTTP request. Errors increment
+// the error counter; successful responses record latency and status code.
 func (s *Stats) RecordRequest(duration time.Duration, statusCode int, err error) {
 	s.totalRequests.Add(1)
 
@@ -108,6 +123,8 @@ func main() {
 	printReport(stats, cfg.Duration)
 }
 
+// runLoadTest spawns cfg.Concurrency workers that send search requests in a
+// loop for cfg.Duration, then returns the collected stats.
 func runLoadTest(cfg Config) *Stats {
 	stats := NewStats()
 	client := &http.Client{
@@ -180,6 +197,8 @@ func runLoadTest(cfg Config) *Stats {
 	return stats
 }
 
+// mustNewRequest creates an HTTP GET request or panics. Used inside the hot
+// loop where a malformed URL is a programming error, not a runtime condition.
 func mustNewRequest(ctx context.Context, rawURL string) *http.Request {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
@@ -188,6 +207,7 @@ func mustNewRequest(ctx context.Context, rawURL string) *http.Request {
 	return req
 }
 
+// printReport formats and prints the load test results to stdout.
 func printReport(stats *Stats, duration time.Duration) {
 	total := stats.totalRequests.Load()
 	success := stats.successCount.Load()
@@ -262,6 +282,8 @@ func printReport(stats *Stats, duration time.Duration) {
 	}
 }
 
+// percentile returns the p-th percentile value from a pre-sorted slice of
+// durations. p should be in the range [0, 100].
 func percentile(sorted []time.Duration, p float64) time.Duration {
 	if len(sorted) == 0 {
 		return 0

@@ -1,3 +1,7 @@
+// Package analytics provides real-time search analytics collection and
+// aggregation. Events are published to Kafka by the Collector and consumed
+// by the Aggregator which maintains in-memory counters, latency histograms,
+// and top-query rankings.
 package analytics
 
 import (
@@ -11,6 +15,9 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/kafka"
 )
 
+// AggregatedStats is the snapshot returned by Aggregator.Stats(). It contains
+// search counts, document-indexing counts, cache hit/miss counters, latency
+// percentiles, throughput, and the most-frequent queries.
 type AggregatedStats struct {
 	TotalSearches     int64        `json:"total_searches"`
 	TotalDocIndexed   int64        `json:"total_docs_indexed"`
@@ -25,10 +32,15 @@ type AggregatedStats struct {
 	ZeroResultQueries []QueryCount `json:"zero_result_queries"`
 	QueriesPerMinute  float64      `json:"queries_per_minute"`
 }
+
+// QueryCount pairs a query string with how many times it has been executed.
 type QueryCount struct {
 	Query string `json:"query"`
 	Count int64  `json:"count"`
 }
+
+// Aggregator consumes analytics events from Kafka and maintains an in-memory
+// aggregate. It is safe for concurrent reads (Stats) and writes (record*).
 type Aggregator struct {
 	mu                sync.RWMutex
 	totalSearches     atomic.Int64
@@ -45,6 +57,7 @@ type Aggregator struct {
 	logger   *slog.Logger
 }
 
+// NewAggregator creates an Aggregator backed by the given Kafka consumer.
 func NewAggregator(consumer *kafka.Consumer) *Aggregator {
 	return &Aggregator{
 		latencies:         make([]int64, 0, 10000),
@@ -55,10 +68,15 @@ func NewAggregator(consumer *kafka.Consumer) *Aggregator {
 		logger:            slog.Default().With("component", "analytics-aggregator"),
 	}
 }
+
+// Start begins consuming events from Kafka. It blocks until ctx is cancelled.
 func (a *Aggregator) Start(ctx context.Context) error {
 	a.logger.Info("analytics aggregator starting")
 	return a.consumer.Start(ctx)
 }
+
+// HandleEvent returns a Kafka message handler that decodes SearchEvent or
+// IndexEvent JSON payloads and records them in the aggregator.
 func HandleEvent(agg *Aggregator) kafka.MessageHandler {
 	return func(ctx context.Context, key []byte, value []byte) error {
 		event, err := kafka.DecodeJSON[SearchEvent](value)
@@ -78,6 +96,8 @@ func HandleEvent(agg *Aggregator) kafka.MessageHandler {
 	}
 }
 
+// recordSearchEvent increments search counters, records latency, and tracks
+// the query string for top-query and zero-result rankings.
 func (a *Aggregator) recordSearchEvent(event SearchEvent) {
 	a.totalSearches.Add(1)
 
@@ -100,9 +120,12 @@ func (a *Aggregator) recordSearchEvent(event SearchEvent) {
 	a.mu.Unlock()
 }
 
+// recordIndexEvent increments the document-indexed counter.
 func (a *Aggregator) recordIndexEvent(event IndexEvent) {
 	a.totalDocIndexed.Add(1)
 }
+
+// Stats returns a point-in-time snapshot of all aggregated analytics data.
 func (a *Aggregator) Stats() AggregatedStats {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
@@ -138,6 +161,7 @@ func (a *Aggregator) Stats() AggregatedStats {
 	return stats
 }
 
+// percentile returns the pct-th percentile from a pre-sorted int64 slice.
 func percentile(sorted []int64, pct int) int64 {
 	if len(sorted) == 0 {
 		return 0
@@ -149,6 +173,8 @@ func percentile(sorted []int64, pct int) int64 {
 	return sorted[idx]
 }
 
+// topN returns the n most frequent entries from a string→count map, sorted
+// descending by count.
 func topN(counts map[string]int64, n int) []QueryCount {
 	result := make([]QueryCount, 0, len(counts))
 	for query, count := range counts {

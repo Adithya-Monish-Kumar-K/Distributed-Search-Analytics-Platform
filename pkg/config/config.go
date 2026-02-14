@@ -1,3 +1,6 @@
+// Package config loads and validates application configuration from YAML files
+// with environment-variable overrides. It provides typed structs for every
+// subsystem (Server, Postgres, Kafka, Redis, Indexer, Search, Gateway, etc.).
 package config
 
 import (
@@ -10,6 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Config is the top-level application configuration.
 type Config struct {
 	Server   ServerConfig   `yaml:"server"`
 	Postgres PostgresConfig `yaml:"postgres"`
@@ -23,6 +27,7 @@ type Config struct {
 	Metrics  MetricsConfig  `yaml:"metrics"`
 }
 
+// ServerConfig holds HTTP server settings.
 type ServerConfig struct {
 	Port            int           `yaml:"port"`
 	ReadTimeout     time.Duration `yaml:"readTimeout"`
@@ -30,6 +35,7 @@ type ServerConfig struct {
 	ShutdownTimeout time.Duration `yaml:"shutdownTimeout"`
 }
 
+// PostgresConfig holds PostgreSQL connection parameters.
 type PostgresConfig struct {
 	Host            string        `yaml:"host"`
 	Port            int           `yaml:"port"`
@@ -42,6 +48,7 @@ type PostgresConfig struct {
 	ConnMaxLifetime time.Duration `yaml:"connMaxLifetime"`
 }
 
+// DSN returns a lib/pq-compatible data source name.
 func (p PostgresConfig) DSN() string {
 	return fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
@@ -49,12 +56,14 @@ func (p PostgresConfig) DSN() string {
 	)
 }
 
+// KafkaConfig holds Kafka broker and topic settings.
 type KafkaConfig struct {
 	Brokers       []string    `yaml:"brokers"`
 	ConsumerGroup string      `yaml:"consumerGroup"`
 	Topics        KafkaTopics `yaml:"topics"`
 }
 
+// KafkaTopics maps logical topic names to their Kafka topic strings.
 type KafkaTopics struct {
 	DocumentIngest  string `yaml:"documentIngest"`
 	IndexComplete   string `yaml:"indexComplete"`
@@ -62,6 +71,7 @@ type KafkaTopics struct {
 	AnalyticsEvents string `yaml:"analyticsEvents"`
 }
 
+// RedisConfig holds Redis connection and caching parameters.
 type RedisConfig struct {
 	Addr     string        `yaml:"addr"`
 	Password string        `yaml:"password"`
@@ -70,6 +80,8 @@ type RedisConfig struct {
 	CacheTTL time.Duration `yaml:"cacheTTL"`
 }
 
+// IndexerConfig controls the indexing engine's memory thresholds, flush
+// intervals, and segment merge policy.
 type IndexerConfig struct {
 	DataDir                string        `yaml:"dataDir"`
 	SegmentMaxSize         int64         `yaml:"segmentMaxSize"`
@@ -78,6 +90,7 @@ type IndexerConfig struct {
 	MaxSegmentsBeforeMerge int           `yaml:"maxSegmentsBeforeMerge"`
 }
 
+// SearchConfig controls query execution limits and timeouts.
 type SearchConfig struct {
 	MaxResults           int           `yaml:"maxResults"`
 	DefaultLimit         int           `yaml:"defaultLimit"`
@@ -85,28 +98,35 @@ type SearchConfig struct {
 	MaxConcurrentQueries int           `yaml:"maxConcurrentQueries"`
 }
 
+// LoggingConfig controls structured logging level and output format.
 type LoggingConfig struct {
 	Level  string `yaml:"level"`
 	Format string `yaml:"format"`
 }
 
+// TracingConfig controls distributed tracing (sample rate, endpoint).
 type TracingConfig struct {
 	Enabled    bool    `yaml:"enabled"`
 	Endpoint   string  `yaml:"endpoint"`
 	SampleRate float64 `yaml:"sampleRate"`
 }
 
+// MetricsConfig controls the Prometheus metrics server.
 type MetricsConfig struct {
 	Enabled bool `yaml:"enabled"`
 	Port    int  `yaml:"port"`
 }
 
+// GatewayConfig holds the API gateway port and upstream service URLs.
 type GatewayConfig struct {
 	Port         int    `yaml:"port"`
 	IngestionURL string `yaml:"ingestionUrl"`
 	SearcherURL  string `yaml:"searcherUrl"`
 }
 
+// Load reads a YAML config file (if provided) and applies environment-variable
+// overrides. It returns a Config populated with sensible defaults for any
+// missing values.
 func Load(path string) (*Config, error) {
 	cfg := defaultConfig()
 	if path != "" {
@@ -122,6 +142,8 @@ func Load(path string) (*Config, error) {
 	return cfg, nil
 }
 
+// defaultConfig returns a Config with production-ready defaults for local
+// development.
 func defaultConfig() *Config {
 	return &Config{
 		Server: ServerConfig{
@@ -174,6 +196,8 @@ func defaultConfig() *Config {
 	}
 }
 
+// applyEnvOverrides reads SP_* environment variables and overrides the
+// corresponding config fields.
 func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv("SP_SERVER_PORT"); v != "" {
 		if port, err := strconv.Atoi(v); err == nil {

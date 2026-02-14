@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// RetryConfig controls the exponential-backoff retry behaviour.
 type RetryConfig struct {
 	MaxAttempts    int
 	InitialDelay   time.Duration
@@ -27,6 +28,8 @@ func defaultRetryConfig() RetryConfig {
 	}
 }
 
+// Retry executes fn up to cfg.MaxAttempts times with exponential backoff and
+// jitter. It respects context cancellation between attempts.
 func Retry(ctx context.Context, name string, cfg RetryConfig, fn func() error) error {
 	defaults := defaultRetryConfig()
 	if cfg.MaxAttempts <= 0 {
@@ -71,6 +74,8 @@ func Retry(ctx context.Context, name string, cfg RetryConfig, fn func() error) e
 	return fmt.Errorf("all %d attempts failed for %s: %w", cfg.MaxAttempts, name, lastErr)
 }
 
+// computeDelay calculates the backoff duration for the given attempt number,
+// applying the multiplier and a random jitter.
 func computeDelay(attempt int, cfg RetryConfig) time.Duration {
 	backoff := float64(cfg.InitialDelay) * math.Pow(cfg.Multiplier, float64(attempt-1))
 	jitter := backoff * cfg.JitterFraction * (2*rand.Float64() - 1)

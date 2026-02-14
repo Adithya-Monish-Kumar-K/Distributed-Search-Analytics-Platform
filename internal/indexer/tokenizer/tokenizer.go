@@ -1,3 +1,6 @@
+// Package tokenizer provides text tokenisation for the search engine.
+// It lower-cases input, splits on non-alphanumeric boundaries, removes
+// stop-words, and applies a simple suffix-based stemmer.
 package tokenizer
 
 import (
@@ -16,11 +19,15 @@ var stopWords = map[string]struct{}{
 	"do": {}, "not": {}, "no": {}, "so": {}, "can": {},
 }
 
+// Token represents a single normalised term and its position in the
+// original text.
 type Token struct {
 	Term     string
 	Position int
 }
 
+// Tokenize breaks text into a slice of stemmed, lowercased Tokens with
+// stop-words removed.
 func Tokenize(text string) []Token {
 	text = strings.ToLower(text)
 	words := strings.FieldsFunc(text, func(r rune) bool {
@@ -48,6 +55,7 @@ func Tokenize(text string) []Token {
 	return tokens
 }
 
+// stem applies a simple suffix-stripping stemmer to the given word.
 func stem(word string) string {
 	suffixes := []struct {
 		suffix      string

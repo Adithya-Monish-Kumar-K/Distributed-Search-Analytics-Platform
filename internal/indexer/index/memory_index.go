@@ -7,6 +7,9 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/indexer/tokenizer"
 )
 
+// MemoryIndex is a concurrency-safe in-memory inverted index. Terms map to
+// per-document Postings, and the entire structure can be snapshotted and
+// reset when flushed to a segment.
 type MemoryIndex struct {
 	mu       sync.RWMutex
 	index    map[string]map[string]*Posting
@@ -14,12 +17,15 @@ type MemoryIndex struct {
 	size     int64
 }
 
+// NewMemoryIndex creates an empty MemoryIndex.
 func NewMemoryIndex() *MemoryIndex {
 	return &MemoryIndex{
 		index: make(map[string]map[string]*Posting),
 	}
 }
 
+// AddDocument tokenises the document and upserts term→posting entries into
+// the index.
 func (m *MemoryIndex) AddDocument(docID string, title string, body string) {
 	fullText := title + " " + body
 	tokens := tokenizer.Tokenize(fullText)
@@ -53,6 +59,7 @@ func (m *MemoryIndex) AddDocument(docID string, title string, body string) {
 	m.docCount++
 }
 
+// Search returns the PostingList for the given term, sorted by DocID.
 func (m *MemoryIndex) Search(term string) PostingList {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -70,6 +77,8 @@ func (m *MemoryIndex) Search(term string) PostingList {
 	return result
 }
 
+// Snapshot returns a sorted copy of all term entries suitable for flushing
+// to a segment.
 func (m *MemoryIndex) Snapshot() []TermEntry {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -93,18 +102,22 @@ func (m *MemoryIndex) Snapshot() []TermEntry {
 	return entries
 }
 
+// Size returns the estimated heap size of the index in bytes.
 func (m *MemoryIndex) Size() int64 {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.size
 }
 
+// DocCount returns the number of documents in the index.
 func (m *MemoryIndex) DocCount() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.docCount
 }
 
+// Reset clears the entire index, releasing all postings and resetting
+// counters.
 func (m *MemoryIndex) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()

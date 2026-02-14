@@ -1,3 +1,7 @@
+// Package handler implements the API gateway's HTTP endpoints. It proxies
+// requests to the ingestion and search services via httputil.ReverseProxy and
+// exposes direct PostgreSQL-backed endpoints for document listing, document
+// retrieval, and API key management.
 package handler
 
 import (
@@ -42,6 +46,7 @@ func New(cfg Config, db *postgres.Client, keyValidator *apikey.Validator) *Handl
 	}
 }
 
+// newProxy creates a single-host reverse proxy for the given target URL.
 func newProxy(target string) *httputil.ReverseProxy {
 	u, _ := url.Parse(target)
 	return httputil.NewSingleHostReverseProxy(u)
@@ -238,6 +243,7 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 
 // ---------- Helpers ----------
 
+// writeJSON serialises data as JSON and writes it with the given status code.
 func (h *Handler) writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -246,6 +252,7 @@ func (h *Handler) writeJSON(w http.ResponseWriter, status int, data any) {
 	}
 }
 
+// writeError writes a JSON error response.
 func (h *Handler) writeError(w http.ResponseWriter, status int, message string) {
 	h.writeJSON(w, status, map[string]string{"error": message})
 }

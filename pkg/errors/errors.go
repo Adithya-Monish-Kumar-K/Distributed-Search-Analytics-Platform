@@ -1,3 +1,6 @@
+// Package errors defines sentinel errors and a structured AppError type used
+// across the platform. AppError carries an HTTP status code so that handlers
+// can translate domain errors into appropriate responses.
 package errors
 
 import (
@@ -18,6 +21,8 @@ var (
 	ErrTimeout             = errors.New("operation timed out")
 )
 
+// AppError wraps a sentinel error with an HTTP status code and a
+// human-readable message.
 type AppError struct {
 	Err        error
 	Message    string
@@ -32,6 +37,7 @@ func (e *AppError) Unwrap() error {
 	return e.Err
 }
 
+// New creates an AppError from a sentinel, status code, and message.
 func New(sentinel error, statusCode int, message string) *AppError {
 	return &AppError{
 		Err:        sentinel,
@@ -40,6 +46,7 @@ func New(sentinel error, statusCode int, message string) *AppError {
 	}
 }
 
+// Newf creates an AppError with a formatted message.
 func Newf(sentinel error, statusCode int, format string, args ...any) *AppError {
 	return &AppError{
 		Err:        sentinel,
@@ -48,6 +55,9 @@ func Newf(sentinel error, statusCode int, format string, args ...any) *AppError 
 	}
 }
 
+// HTTPStatusCode extracts an HTTP status code from err. If err wraps an
+// AppError, its StatusCode is returned; otherwise a mapping from known
+// sentinel errors is used, defaulting to 500.
 func HTTPStatusCode(err error) int {
 	var appErr *AppError
 	if errors.As(err, &appErr) {

@@ -1,3 +1,6 @@
+// Package shard provides hash-based shard routing for index engines. Each
+// shard owns an independent indexer.Engine instance backed by its own data
+// directory, and the Router dispatches documents by shard ID.
 package shard
 
 import (
@@ -10,6 +13,7 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/config"
 )
 
+// Router maps shard IDs to dedicated indexer.Engine instances.
 type Router struct {
 	engines   map[int]*indexer.Engine
 	mu        sync.RWMutex
@@ -18,6 +22,8 @@ type Router struct {
 	logger    *slog.Logger
 }
 
+// NewRouter creates numShards engines, each in its own sub-directory under
+// baseCfg.DataDir.
 func NewRouter(baseCfg config.IndexerConfig, numShards int) (*Router, error) {
 	r := &Router{
 		engines:   make(map[int]*indexer.Engine, numShards),
@@ -43,6 +49,7 @@ func NewRouter(baseCfg config.IndexerConfig, numShards int) (*Router, error) {
 	return r, nil
 }
 
+// Route returns the Engine responsible for the given shard ID.
 func (r *Router) Route(shardID int) (*indexer.Engine, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -54,6 +61,7 @@ func (r *Router) Route(shardID int) (*indexer.Engine, error) {
 	return engine, nil
 }
 
+// GetAllEngines returns a snapshot map of all shard engines.
 func (r *Router) GetAllEngines() map[int]*indexer.Engine {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -64,10 +72,12 @@ func (r *Router) GetAllEngines() map[int]*indexer.Engine {
 	return result
 }
 
+// NumShards returns the number of shards managed by this router.
 func (r *Router) NumShards() int {
 	return r.numShards
 }
 
+// FlushAll flushes every shard engine to disk.
 func (r *Router) FlushAll() error {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -83,12 +93,14 @@ func (r *Router) FlushAll() error {
 	return firstErr
 }
 
+// Close flushes and closes every shard engine.
 func (r *Router) Close() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.closeAll()
 }
 
+// closeAll closes every shard engine, collecting the first error encountered.
 func (r *Router) closeAll() error {
 	var firstErr error
 	for id, engine := range r.engines {

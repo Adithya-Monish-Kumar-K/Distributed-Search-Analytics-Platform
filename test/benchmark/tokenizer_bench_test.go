@@ -26,6 +26,8 @@ var sampleTexts = map[string]string{
         failures in distributed deployments. `, 20),
 }
 
+// BenchmarkTokenize measures tokenisation throughput for short, medium, and
+// long texts.
 func BenchmarkTokenize(b *testing.B) {
 	for name, text := range sampleTexts {
 		b.Run(name, func(b *testing.B) {
@@ -39,6 +41,7 @@ func BenchmarkTokenize(b *testing.B) {
 	}
 }
 
+// BenchmarkTokenizeParallel measures concurrent tokenisation throughput.
 func BenchmarkTokenizeParallel(b *testing.B) {
 	text := sampleTexts["medium"]
 	b.ReportAllocs()
@@ -51,6 +54,8 @@ func BenchmarkTokenizeParallel(b *testing.B) {
 	})
 }
 
+// BenchmarkStemming measures the stemming path through Tokenize for a set of
+// representative words.
 func BenchmarkStemming(b *testing.B) {
 	words := []string{
 		"running", "distributed", "searching", "indexing",
@@ -66,6 +71,8 @@ func BenchmarkStemming(b *testing.B) {
 	}
 }
 
+// BenchmarkTokenizeVaryingSize measures tokenisation throughput at increasing
+// input sizes.
 func BenchmarkTokenizeVaryingSize(b *testing.B) {
 	sizes := []int{10, 100, 500, 1000, 5000}
 	baseWord := "distributed search analytics platform indexing "

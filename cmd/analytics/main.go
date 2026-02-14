@@ -1,3 +1,12 @@
+// Command analytics starts the standalone analytics aggregation service.
+//
+// It consumes search-analytics events from Kafka, aggregates them in memory
+// (total queries, latency percentiles, cache hit rate, error rate, top queries),
+// and exposes an HTTP API at GET /api/v1/analytics for dashboards.
+//
+// Usage:
+//
+//	go run ./cmd/analytics [-config configs/development.yaml]
 package main
 
 import (
@@ -18,9 +27,9 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/middleware"
 )
 
-// analytics is a standalone analytics aggregation service.
-// It consumes analytics events from Kafka, aggregates them in memory,
-// and exposes an HTTP API for querying stats.
+// main boots the standalone analytics service: it creates a Kafka consumer for
+// analytics events, starts the in-memory aggregator, registers a health checker,
+// and serves the HTTP API. Graceful shutdown is triggered by SIGINT/SIGTERM.
 func main() {
 	configPath := flag.String("config", "configs/development.yaml", "path to config file")
 	flag.Parse()

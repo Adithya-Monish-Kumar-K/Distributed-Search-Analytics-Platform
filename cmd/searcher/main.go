@@ -1,3 +1,12 @@
+// Command searcher starts the distributed search service.
+//
+// The searcher loads shard data from disk, connects to Redis for query caching,
+// starts an analytics collector/aggregator pipeline via Kafka, and exposes an
+// HTTP API for full-text search, cache management, analytics, and health checks.
+//
+// Usage:
+//
+//	go run ./cmd/searcher [-config configs/development.yaml]
 package main
 
 import (
@@ -25,8 +34,13 @@ import (
 	pkgredis "github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/redis"
 )
 
+// numShards is the fixed number of index shards. Each shard holds a subset of
+// the indexed documents, determined by consistent hashing on document ID.
 const numShards = 8
 
+// main initialises all dependencies (config, logging, metrics, shard router,
+// Redis cache, Kafka analytics pipeline, health checker) and starts the HTTP
+// server on the configured port. Graceful shutdown is triggered by SIGINT/SIGTERM.
 func main() {
 	configPath := flag.String("config", "configs/development.yaml", "path to config file")
 	flag.Parse()

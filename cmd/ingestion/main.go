@@ -1,3 +1,12 @@
+// Command ingestion starts the document ingestion HTTP service.
+//
+// The service accepts new documents via POST /api/v1/documents, validates them,
+// persists metadata to PostgreSQL, and publishes them to a Kafka topic for
+// downstream indexing. It provides a health endpoint at GET /health.
+//
+// Usage:
+//
+//	go run ./cmd/ingestion [-config configs/development.yaml]
 package main
 
 import (
@@ -18,6 +27,9 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/postgres"
 )
 
+// main loads configuration, connects to PostgreSQL, creates the Kafka producer,
+// wires up the ingestion handler, and starts the HTTP server. Graceful shutdown
+// is triggered by SIGINT/SIGTERM.
 func main() {
 	configPath := flag.String("config", "configs/development.yaml", "path to config file")
 	flag.Parse()

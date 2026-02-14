@@ -6,11 +6,13 @@ import (
 	"net/http"
 )
 
+// Handler exposes an HTTP endpoint for reading aggregated analytics.
 type Handler struct {
 	aggregator *Aggregator
 	logger     *slog.Logger
 }
 
+// NewHandler creates a Handler backed by the given Aggregator.
 func NewHandler(aggregator *Aggregator) *Handler {
 	return &Handler{
 		aggregator: aggregator,
@@ -18,6 +20,8 @@ func NewHandler(aggregator *Aggregator) *Handler {
 	}
 }
 
+// Stats handles GET /api/v1/analytics and returns the current aggregated stats
+// as JSON.
 func (h *Handler) Stats(w http.ResponseWriter, r *http.Request) {
 	stats := h.aggregator.Stats()
 	w.Header().Set("Content-Type", "application/json")

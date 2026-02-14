@@ -1,3 +1,5 @@
+// Package executor runs parsed query plans against one or more indexer
+// engines, applying Boolean filtering (AND/OR/NOT) and BM25 ranking.
 package executor
 
 import (
@@ -11,6 +13,7 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/ranker"
 )
 
+// SearchResult holds the final output of a query execution.
 type SearchResult struct {
 	Query     string             `json:"query"`
 	TotalHits int                `json:"total_hits"`
@@ -18,11 +21,13 @@ type SearchResult struct {
 	TermStats map[string]int     `json:"term_stats"`
 }
 
+// Executor runs queries against a single indexer.Engine instance.
 type Executor struct {
 	engine *indexer.Engine
 	logger *slog.Logger
 }
 
+// New creates an Executor backed by the given engine.
 func New(engine *indexer.Engine) *Executor {
 	return &Executor{
 		engine: engine,
@@ -30,6 +35,8 @@ func New(engine *indexer.Engine) *Executor {
 	}
 }
 
+// Execute runs the query plan: collects postings per term, applies
+// AND/OR/NOT logic, ranks with BM25, and returns the top-limit results.
 func (e *Executor) Execute(ctx context.Context, plan *parser.QueryPlan, limit int) (*SearchResult, error) {
 	if len(plan.Terms) == 0 {
 		return &SearchResult{
@@ -107,6 +114,8 @@ func (e *Executor) Execute(ctx context.Context, plan *parser.QueryPlan, limit in
 	}, nil
 }
 
+// intersectPostings returns the set of DocIDs present in every term's
+// PostingList (AND semantics).
 func intersectPostings(postingsPerTerm map[string]index.PostingList) map[string]struct{} {
 	if len(postingsPerTerm) == 0 {
 		return make(map[string]struct{})
@@ -140,6 +149,8 @@ func intersectPostings(postingsPerTerm map[string]index.PostingList) map[string]
 	return candidates
 }
 
+// unionPostings returns the set of DocIDs present in any term's PostingList
+// (OR semantics).
 func unionPostings(postingsPerTerm map[string]index.PostingList) map[string]struct{} {
 	result := make(map[string]struct{})
 	for _, postings := range postingsPerTerm {

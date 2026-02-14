@@ -1,3 +1,5 @@
+// Package merger provides a min-heap based merge of scored results from
+// multiple shards, returning the global top-K documents.
 package merger
 
 import (
@@ -6,6 +8,8 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/searcher/ranker"
 )
 
+// Merge combines scored documents from multiple shards and returns the top
+// limit results ordered by descending score.
 func Merge(shardResults [][]ranker.ScoredDoc, limit int) []ranker.ScoredDoc {
 	if limit <= 0 {
 		limit = 10

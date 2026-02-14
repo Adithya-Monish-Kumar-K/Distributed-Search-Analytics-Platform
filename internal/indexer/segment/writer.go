@@ -12,6 +12,7 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/internal/indexer/index"
 )
 
+// MagicBytes identifies a valid .spdx segment file.
 const (
 	MagicBytes    uint32 = 0x53504458
 	FormatVersion uint32 = 1
@@ -19,6 +20,7 @@ const (
 	FooterSize    int    = 32
 )
 
+// SegmentHeader is the 64-byte header written at the start of every segment.
 type SegmentHeader struct {
 	Magic      uint32
 	Version    uint32
@@ -31,6 +33,8 @@ type SegmentHeader struct {
 	PostSize   int64
 }
 
+// DictEntry maps a term to its postings offset, length, and document frequency
+// in the segment file.
 type DictEntry struct {
 	Term       string `json:"t"`
 	PostOffset int64  `json:"o"`
@@ -38,14 +42,18 @@ type DictEntry struct {
 	DocFreq    int    `json:"d"`
 }
 
+// Writer serialises TermEntry slices into new .spdx segment files.
 type Writer struct {
 	dataDir string
 }
 
+// NewWriter creates a Writer that writes segments into the given directory.
 func NewWriter(dataDir string) *Writer {
 	return &Writer{dataDir: dataDir}
 }
 
+// Write atomically creates a new segment file containing the given term
+// entries. It writes to a .tmp file first and renames on success.
 func (w *Writer) Write(entries []index.TermEntry) (string, error) {
 	if len(entries) == 0 {
 		return "", fmt.Errorf("cannot write empty segment")

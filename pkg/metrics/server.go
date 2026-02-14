@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+// StartServer launches a dedicated HTTP server for Prometheus scraping on the
+// given port and returns a Shutdown function.
 func StartServer(port int) (shutdown func(context.Context) error) {
 	mux := http.NewServeMux()
 	mux.Handle("/metrics", Handler())

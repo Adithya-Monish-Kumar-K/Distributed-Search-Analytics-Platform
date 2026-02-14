@@ -7,6 +7,9 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/kafka"
 )
 
+// Collector buffers analytics events in-memory and publishes them to Kafka
+// asynchronously. If the internal channel fills up, events are dropped with
+// a warning log rather than blocking the caller.
 type Collector struct {
 	producer *kafka.Producer
 	eventCh  chan interface{}
@@ -14,6 +17,8 @@ type Collector struct {
 	done     chan struct{}
 }
 
+// NewCollector creates a Collector with the given Kafka producer and channel
+// buffer size. If bufferSize <= 0 it defaults to 10 000.
 func NewCollector(producer *kafka.Producer, bufferSize int) *Collector {
 	if bufferSize <= 0 {
 		bufferSize = 10000
@@ -28,6 +33,9 @@ func NewCollector(producer *kafka.Producer, bufferSize int) *Collector {
 	return c
 }
 
+// Start begins the background goroutine that reads events from the channel
+// and publishes them to Kafka. It stops when ctx is cancelled, draining any
+// remaining events before returning.
 func (c *Collector) Start(ctx context.Context) {
 	go func() {
 		defer close(c.done)
@@ -53,6 +61,8 @@ func (c *Collector) Start(ctx context.Context) {
 	c.logger.Info("analytics collector started", "buffer_size", cap(c.eventCh))
 }
 
+// Track enqueues an analytics event for asynchronous publishing. It is
+// non-blocking: if the internal buffer is full the event is silently dropped.
 func (c *Collector) Track(event interface{}) {
 	select {
 	case c.eventCh <- event:
@@ -61,11 +71,14 @@ func (c *Collector) Track(event interface{}) {
 	}
 }
 
+// Close shuts down the collector by closing the event channel and waiting for
+// the background goroutine to finish draining.
 func (c *Collector) Close() {
 	close(c.eventCh)
 	<-c.done
 }
 
+// drainRemaining publishes any events left in the channel before shutdown.
 func (c *Collector) drainRemaining() {
 	for {
 		select {

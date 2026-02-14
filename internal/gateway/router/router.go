@@ -1,3 +1,5 @@
+// Package router wires up all API gateway routes and applies the middleware
+// chain (RequestID → CORS → Auth → RateLimit).
 package router
 
 import (

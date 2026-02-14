@@ -1,3 +1,13 @@
+// Command indexer starts the document indexing service.
+//
+// The indexer consumes document-ingest events from Kafka, tokenises their
+// content (with Porter stemming), and writes inverted-index entries into the
+// appropriate shard. Each shard periodically flushes its in-memory index to
+// immutable on-disk segments for durability.
+//
+// Usage:
+//
+//	go run ./cmd/indexer [-config configs/development.yaml]
 package main
 
 import (
@@ -16,8 +26,13 @@ import (
 	"github.com/Adithya-Monish-Kumar-K/Distributed-Search-Analytics-Platform/pkg/logger"
 )
 
+// numShards is the fixed number of index shards matching the shard count in
+// the searcher service.
 const numShards = 8
 
+// main initialises the shard router, starts flush loops for every shard, then
+// consumes Kafka messages until SIGINT/SIGTERM. Before exiting it flushes all
+// shards one final time to ensure no data loss.
 func main() {
 	configPath := flag.String("config", "configs/development.yaml", "path to config file")
 	flag.Parse()

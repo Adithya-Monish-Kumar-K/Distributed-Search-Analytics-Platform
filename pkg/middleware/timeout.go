@@ -7,6 +7,9 @@ import (
 	"time"
 )
 
+// Timeout returns middleware that cancels the request context after the given
+// duration and returns a 504 Gateway Timeout if the handler has not yet
+// written a response.
 func Timeout(timeout time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -30,6 +33,8 @@ func Timeout(timeout time.Duration) func(http.Handler) http.Handler {
 	}
 }
 
+// timeoutWriter tracks whether the handler has written a response so the
+// timeout wrapper knows if it can safely send a 504.
 type timeoutWriter struct {
 	http.ResponseWriter
 	written bool
