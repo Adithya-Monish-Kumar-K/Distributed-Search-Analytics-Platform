@@ -224,7 +224,39 @@ export async function createApiKey(
 export async function listApiKeys(
   apiKey?: string,
 ): Promise<{ keys: ApiKey[] }> {
-  return fetchJSON<{ keys: ApiKey[] }>(`${GATEWAY_BASE}/api/v1/admin/keys`, {
-    apiKey,
-  });
+  const raw = await fetchJSON<{ keys: RawApiKey[]; count?: number }>(
+    `${GATEWAY_BASE}/api/v1/admin/keys`,
+    { apiKey },
+  );
+  return { keys: (raw.keys ?? []).map(transformApiKey) };
+}
+
+/** Raw shape returned by the Go gateway — handles both old (uppercase) and new (lowercase JSON-tagged) formats */
+interface RawApiKey {
+  // New format (with json tags)
+  id?: string;
+  name?: string;
+  rate_limit?: number;
+  is_active?: boolean;
+  created_at?: string;
+  expires_at?: string | null;
+  // Old format (Go default, uppercase)
+  ID?: string;
+  Name?: string;
+  RateLimit?: number;
+  IsActive?: boolean;
+  CreatedAt?: string;
+  ExpiresAt?: string | null;
+}
+
+/** Normalise a raw API key object into the UI-expected shape */
+function transformApiKey(raw: RawApiKey): ApiKey {
+  return {
+    id: raw.id ?? raw.ID ?? "",
+    name: raw.name ?? raw.Name ?? "",
+    rate_limit: raw.rate_limit ?? raw.RateLimit ?? 0,
+    is_active: raw.is_active ?? raw.IsActive ?? true, // ListKeys only returns active keys
+    created_at: raw.created_at ?? raw.CreatedAt ?? "",
+    expires_at: raw.expires_at ?? raw.ExpiresAt ?? undefined,
+  };
 }

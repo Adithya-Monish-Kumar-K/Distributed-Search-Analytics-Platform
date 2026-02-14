@@ -33,10 +33,12 @@ export function safePercent(ratio: number | null | undefined, decimals = 1): str
   return (ratio * 100).toFixed(decimals);
 }
 
-export function timeAgo(date: string): string {
-  const seconds = Math.floor(
-    (Date.now() - new Date(date).getTime()) / 1000,
-  );
+export function timeAgo(date: string | undefined | null): string {
+  if (!date) return "—";
+  const ms = new Date(date).getTime();
+  if (isNaN(ms)) return "—";
+  const seconds = Math.floor((Date.now() - ms) / 1000);
+  if (seconds < 0) return "just now";
   if (seconds < 60) return `${seconds}s ago`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;

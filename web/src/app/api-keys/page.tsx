@@ -24,18 +24,25 @@ export default function ApiKeysPage() {
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [storedApiKey, setStoredApiKey] = useState<string>("");
+  const [initialized, setInitialized] = useState(false);
 
-  // We need an API key to call the gateway. For bootstrap, try localStorage.
+  // Load the stored key from localStorage after mount (avoids SSR mismatch).
   useEffect(() => {
     const k = localStorage.getItem("sp_api_key") ?? "";
     setStoredApiKey(k);
+    setInitialized(true);
   }, []);
 
   const fetchKeys = useCallback(async () => {
+    if (!storedApiKey) {
+      setLoading(false);
+      setError("Enter a gateway API key above, then click Save & Refresh.");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const res = await listApiKeys(storedApiKey || undefined);
+      const res = await listApiKeys(storedApiKey);
       setKeys(res.keys ?? []);
     } catch (err) {
       setError(
@@ -48,9 +55,12 @@ export default function ApiKeysPage() {
     }
   }, [storedApiKey]);
 
+  // Only auto-fetch once localStorage has been read.
   useEffect(() => {
-    fetchKeys();
-  }, [fetchKeys]);
+    if (initialized) {
+      fetchKeys();
+    }
+  }, [fetchKeys, initialized]);
 
   return (
     <div className="space-y-6">
