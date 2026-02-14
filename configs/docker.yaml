@@ -57,3 +57,8 @@ tracing:
 metrics:
   enabled: true
   port: 9090
+
+gateway:
+  port: 8082
+  ingestionUrl: http://ingestion:8080
+  searcherUrl: http://searcher:8080
