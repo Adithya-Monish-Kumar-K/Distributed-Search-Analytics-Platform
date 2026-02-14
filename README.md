@@ -57,6 +57,7 @@ A production-grade distributed full-text search engine built from scratch in Go.
 - **Resilience** — Circuit breakers, exponential backoff retry with jitter, request timeouts
 - **RPC Framework** — Lightweight JSON-over-TCP RPC for internal service communication
 - **OpenAPI Spec** — Full OpenAPI 3.0.3 specification for the entire API surface
+- **Web UI** — Next.js dashboard with search, document management, analytics, API key management, and cache controls
 - **Zero Dependencies at Runtime** — Scratch-based Docker images (~15MB)
 
 ---
@@ -66,6 +67,7 @@ A production-grade distributed full-text search engine built from scratch in Go.
 - [Prerequisites](#prerequisites)
 - [Quick Start — Docker Compose](#quick-start--docker-compose)
 - [Quick Start — Run Locally](#quick-start--run-locally)
+- [Web UI](#web-ui)
 - [Services](#services)
 - [API Usage](#api-usage)
 - [API Key Management](#api-key-management)
@@ -93,6 +95,7 @@ A production-grade distributed full-text search engine built from scratch in Go.
 | **Kafka** | 3.5+ | Message broker (included in Docker Compose) |
 | **Redis** | 7+ | Query cache (included in Docker Compose) |
 | **kubectl** | 1.27+ | Kubernetes deployment (optional) |
+| **Node.js** | 20+ | Web UI frontend (optional) |
 | **golangci-lint** | 1.55+ | Linting (optional) |
 
 ---
@@ -223,6 +226,54 @@ go run ./cmd/analytics
 
 > **Tip:** Override ports with environment variables:  
 > `SP_SERVER_PORT=8083 go run ./cmd/analytics`
+
+---
+
+## Web UI
+
+The platform includes a full web dashboard built with **Next.js 14**, **TypeScript**, and **Tailwind CSS**.
+
+### Pages
+
+| Page | Route | Description |
+|------|-------|-------------|
+| **Dashboard** | `/` | Service health status, key metrics (queries, latency, cache hit rate, error rate), latency distribution, top queries |
+| **Search** | `/search` | Full-text search interface with BM25 scores, boolean query support, result count, timing, cache hit indicator, search history |
+| **Documents** | `/documents` | Document list with status badges, ingest new documents via form, pagination |
+| **Analytics** | `/analytics` | Latency percentiles (P50/P95/P99) with visual bars, cache performance ring chart, top queries table with share percentages |
+| **API Keys** | `/api-keys` | Create/list/revoke API keys, store gateway key in browser, CLI usage reference |
+| **Cache** | `/cache` | Cache hit/miss ratio visualization, stats breakdown, flush cache button, Redis configuration reference |
+
+### Run the Web UI
+
+```bash
+cd web
+npm install
+npm run dev
+# Opens at http://localhost:3000
+```
+
+The UI proxies API requests to the backend services via Next.js rewrites (configured in `next.config.js`), so no CORS issues in development.
+
+### Build for Production
+
+```bash
+cd web
+npm run build
+npm start
+```
+
+Or with Docker:
+
+```bash
+cd web
+docker build -t searchplatform-ui .
+docker run -p 3000:3000 \
+  -e NEXT_PUBLIC_GATEWAY_URL=http://gateway:8082 \
+  -e NEXT_PUBLIC_SEARCH_URL=http://searcher:8080 \
+  -e NEXT_PUBLIC_INGESTION_URL=http://ingestion:8081 \
+  searchplatform-ui
+```
 
 ---
 
@@ -485,6 +536,15 @@ curl "http://localhost:8082/api/v1/search?q=test&api_key=<key>"
 │   ├── benchmark/              # Go micro-benchmarks
 │   ├── e2e/                    # End-to-end platform tests
 │   └── integration/            # Integration tests (gateway, etc.)
+├── web/                        # Next.js web dashboard
+│   ├── src/
+│   │   ├── app/                # App Router pages (dashboard, search, …)
+│   │   ├── components/         # Reusable UI components
+│   │   └── lib/                # API client, types, utilities
+│   ├── Dockerfile              # Multi-stage production build
+│   ├── next.config.js          # API proxy rewrites
+│   ├── tailwind.config.ts      # Brand color palette
+│   └── package.json
 ├── docker-compose.yml          # Full local development stack
 ├── Makefile                    # Build, test, lint, deploy commands
 ├── go.mod
