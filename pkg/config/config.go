@@ -17,6 +17,7 @@ type Config struct {
 	Redis    RedisConfig    `yaml:"redis"`
 	Indexer  IndexerConfig  `yaml:"indexer"`
 	Search   SearchConfig   `yaml:"search"`
+	Gateway  GatewayConfig  `yaml:"gateway"`
 	Logging  LoggingConfig  `yaml:"logging"`
 	Tracing  TracingConfig  `yaml:"tracing"`
 	Metrics  MetricsConfig  `yaml:"metrics"`
@@ -100,6 +101,12 @@ type MetricsConfig struct {
 	Port    int  `yaml:"port"`
 }
 
+type GatewayConfig struct {
+	Port         int    `yaml:"port"`
+	IngestionURL string `yaml:"ingestionUrl"`
+	SearcherURL  string `yaml:"searcherUrl"`
+}
+
 func Load(path string) (*Config, error) {
 	cfg := defaultConfig()
 	if path != "" {
@@ -159,6 +166,11 @@ func defaultConfig() *Config {
 			Enabled: true,
 			Port:    9090,
 		},
+		Gateway: GatewayConfig{
+			Port:         8082,
+			IngestionURL: "http://localhost:8081",
+			SearcherURL:  "http://localhost:8080",
+		},
 	}
 }
 
@@ -202,5 +214,16 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("SP_LOGGING_FORMAT"); v != "" {
 		cfg.Logging.Format = v
+	}
+	if v := os.Getenv("SP_GATEWAY_PORT"); v != "" {
+		if port, err := strconv.Atoi(v); err == nil {
+			cfg.Gateway.Port = port
+		}
+	}
+	if v := os.Getenv("SP_GATEWAY_INGESTION_URL"); v != "" {
+		cfg.Gateway.IngestionURL = v
+	}
+	if v := os.Getenv("SP_GATEWAY_SEARCHER_URL"); v != "" {
+		cfg.Gateway.SearcherURL = v
 	}
 }
