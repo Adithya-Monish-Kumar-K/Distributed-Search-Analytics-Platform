@@ -57,6 +57,8 @@ A production-grade distributed full-text search engine built from scratch in Go.
 - **Resilience** — Circuit breakers, exponential backoff retry with jitter, request timeouts
 - **RPC Framework** — Lightweight JSON-over-TCP RPC for internal service communication
 - **OpenAPI Spec** — Full OpenAPI 3.0.3 specification for the entire API surface
+- **Segment Hot-Reload** — Searcher periodically scans for new segments and loads them without restart (10s interval)
+- **Document Status Pipeline** — Indexer updates PostgreSQL document status from PENDING → INDEXED/FAILED after processing
 - **Web UI** — Next.js dashboard with search, document management, analytics, API key management, and cache controls
 - **Zero Dependencies at Runtime** — Scratch-based Docker images (~15MB)
 
@@ -130,6 +132,7 @@ Expected output — all services should show `running (healthy)` or `running`:
 | sp-ingestion | 8081 | Document ingestion API |
 | sp-indexer | — | Kafka consumer → index builder |
 | sp-searcher | 8080 | Search API + metrics on 9090 |
+| sp-gateway | 8082 | API gateway (auth, rate limiting, CORS) |
 
 **Stop everything:**
 
@@ -282,8 +285,8 @@ docker run -p 3000:3000 \
 | Service | Command | Default Port | Description |
 |---------|---------|-------------|-------------|
 | **Ingestion** | `go run ./cmd/ingestion` | 8081 | HTTP API accepting documents, validates, stores metadata in PostgreSQL, publishes to Kafka |
-| **Indexer** | `go run ./cmd/indexer` | — (no HTTP) | Kafka consumer that tokenizes documents and builds inverted index across 8 shards |
-| **Searcher** | `go run ./cmd/searcher` | 8080 | Full-text search with BM25 ranking, Redis cache, analytics tracking |
+| **Indexer** | `go run ./cmd/indexer` | — (no HTTP) | Kafka consumer that tokenizes documents, builds inverted index across 8 shards, and updates document status in PostgreSQL (PENDING → INDEXED/FAILED) |
+| **Searcher** | `go run ./cmd/searcher` | 8080 | Full-text search with BM25 ranking, Redis cache, analytics tracking, periodic segment hot-reload |
 | **Gateway** | `go run ./cmd/gateway` | 8082 | API gateway — auth, rate limiting, CORS, proxies to ingestion and search |
 | **Analytics** | `go run ./cmd/analytics` | 8080 | Standalone analytics aggregation from Kafka events |
 | **Auth CLI** | `go run ./cmd/auth` | — (CLI) | Command-line tool for managing API keys |
@@ -356,7 +359,22 @@ curl http://localhost:8080/api/v1/analytics
 curl http://localhost:8080/health/live    # Liveness
 curl http://localhost:8080/health/ready   # Readiness (checks all deps)
 curl http://localhost:8081/health          # Ingestion health
+curl http://localhost:8082/health          # Gateway health
 ```
+
+### Document Status
+
+After ingestion, documents start in `PENDING` status. The indexer processes them and updates the status in PostgreSQL:
+
+```bash
+# Check document status
+docker exec -it sp-postgres psql -U searchplatform -c \
+  "SELECT id, title, status, created_at FROM documents ORDER BY created_at DESC LIMIT 5;"
+```
+
+Status lifecycle: `PENDING` → `INDEXED` (success) or `FAILED` (error during indexing).
+
+> **Note:** After a document is indexed, the searcher's segment hot-reload will pick up the new segment within ~10 seconds — no service restart required.
 
 ---
 
@@ -440,10 +458,10 @@ curl "http://localhost:8082/api/v1/search?q=test&api_key=<key>"
 | GET | `/api/v1/documents` | Yes | List documents (direct DB) |
 | GET | `/api/v1/analytics` | Yes | Proxy to search analytics |
 | GET | `/api/v1/cache/stats` | Yes | Proxy to cache stats |
-| POST | `/admin/api-keys` | Yes | Create a new API key |
-| GET | `/admin/api-keys` | Yes | List all API keys |
-| GET | `/health/live` | No | Liveness probe |
-| GET | `/health/ready` | No | Readiness probe |
+| POST | `/api/v1/admin/keys` | Yes | Create a new API key |
+| GET | `/api/v1/admin/keys` | Yes | List all API keys |
+| DELETE | `/api/v1/admin/keys/:id` | Yes | Revoke an API key |
+| GET | `/health` | No | Health check |
 
 ### Metrics (`:9090`)
 
@@ -482,7 +500,8 @@ curl "http://localhost:8082/api/v1/search?q=test&api_key=<key>"
 │   ├── docker/                 # Multi-stage Dockerfiles
 │   │   ├── Dockerfile.ingestion
 │   │   ├── Dockerfile.indexer
-│   │   └── Dockerfile.searcher
+│   │   ├── Dockerfile.searcher
+│   │   └── Dockerfile.gateway
 │   └── k8s/                    # Kubernetes manifests (Kustomize)
 │       ├── base/
 │       └── overlays/
@@ -646,7 +665,7 @@ go build -o bin/loadtest   ./cmd/loadtest
 
 ```bash
 make docker-build
-# Builds: searchplatform-ingestion, searchplatform-indexer, searchplatform-searcher
+# Builds: searchplatform-ingestion, searchplatform-indexer, searchplatform-searcher, searchplatform-gateway
 ```
 
 ---
@@ -799,6 +818,12 @@ curl http://localhost:8080/health/live
 
 # Readiness — are all dependencies connected?
 curl http://localhost:8080/health/ready
+
+# Gateway health
+curl http://localhost:8082/health
+
+# Ingestion health
+curl http://localhost:8081/health
 ```
 
 ### Common Debugging Commands

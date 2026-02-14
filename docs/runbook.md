@@ -3,9 +3,9 @@
 ## Service Startup Order
 
 1. Infrastructure: Zookeeper → Kafka → Redis → PostgreSQL
-2. Application: Indexer → Ingestion → Searcher
+2. Application: Indexer → Ingestion → Searcher → Gateway
 
-The searcher can start before the indexer, but won't return results until indexes are built.
+The searcher can start before the indexer, but won't return results until indexes are built. The gateway depends on PostgreSQL for auth and should be started after the database is ready.
 
 ## Health Checks
 
@@ -17,6 +17,14 @@ curl http://localhost:8080/health/live
 # Readiness (are all dependencies healthy?)
 curl http://localhost:8080/health/ready
 # Expected: {"status":"up","components":{"index_engine":{"status":"up"},"redis":{"status":"up"}}}
+
+# Gateway health
+curl http://localhost:8082/health
+# Expected: {"status":"ok"}
+
+# Ingestion health
+curl http://localhost:8081/health
+# Expected: {"status":"ok"}
 ```
 
 ## Common Issues
@@ -83,6 +91,65 @@ docker exec sp-kafka kafka-consumer-groups \
 
 If lag is growing, the indexer isn't keeping up. Scale indexer instances or increase `segmentMaxSize` to reduce flush frequency.
 
+### Documents stuck in PENDING status
+
+**Symptom:** Documents show as `PENDING` in the web UI or PostgreSQL and never transition to `INDEXED`.
+
+**Diagnosis:**
+```bash
+# Check how many documents are stuck
+docker exec -it sp-postgres psql -U searchplatform -c \
+  "SELECT status, count(*) FROM documents GROUP BY status;"
+
+# Check indexer logs for errors
+docker logs sp-indexer --tail 100
+```
+
+**Common causes:**
+1. **Indexer running old code** — If you changed Go code, you must rebuild the Docker image:
+   ```bash
+   docker compose build indexer
+   docker compose up -d indexer
+   ```
+2. **Indexer not connected to PostgreSQL** — The indexer needs a PostgreSQL connection to update status. Check for connection errors in logs.
+3. **Kafka consumer not running** — Ensure the indexer consumer group is active.
+
+**Manual fix for existing stuck documents:**
+```bash
+docker exec -it sp-postgres psql -U searchplatform -c \
+  "UPDATE documents SET status = 'INDEXED' WHERE status = 'PENDING';"
+```
+
+### Recently ingested documents not appearing in search
+
+**Symptom:** Document status is `INDEXED` but search returns no results for it.
+
+**Cause:** The searcher loads segments on startup and hot-reloads new segments every 10 seconds. There can be up to a ~15 second delay between indexing and searchability.
+
+**Resolution:** Wait 15 seconds and retry. If the document still doesn't appear:
+```bash
+# Verify segment files exist
+ls data/index/shard-*/  | grep ".spdx"
+
+# Check searcher logs for hot-reload messages
+docker logs sp-searcher --tail 50 | grep -i "reload\|segment"
+```
+
+### Docker images running stale code
+
+**Symptom:** Code changes don't take effect after `docker compose up`.
+
+**Resolution:** Docker caches build layers. Always rebuild after Go code changes:
+```bash
+# Rebuild specific service
+docker compose build <service>
+docker compose up -d <service>
+
+# Rebuild all services (nuclear option)
+docker compose build --no-cache
+docker compose up -d
+```
+
 ### Circuit breaker open
 
 **Symptom:** Metrics show `circuit_breaker_state` = 1
@@ -111,8 +178,9 @@ All services handle `SIGINT` and `SIGTERM`:
 1. Stop accepting new requests
 2. Drain in-flight requests (up to `shutdownTimeout`)
 3. Flush memory indexes to disk (indexer/searcher)
-4. Close Kafka consumers/producers
-5. Close Redis and PostgreSQL connections
+4. Stop segment hot-reload goroutine (searcher)
+5. Close Kafka consumers/producers
+6. Close Redis and PostgreSQL connections
 
 ```bash
 # Graceful stop

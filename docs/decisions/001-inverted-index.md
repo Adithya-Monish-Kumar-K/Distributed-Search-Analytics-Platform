@@ -32,6 +32,7 @@ Build a custom LSM-tree-inspired inverted index with:
 - Crash-safe: no partial segment writes (atomic rename)
 - Lock-free reads on immutable segments
 - Simple recovery: just re-read existing `.spdx` files on startup
+- **Segment hot-reload**: searcher periodically scans for new segments and loads them without restart (10-second interval)
 
 **Negative:**
 - JSON posting lists are ~3x larger than binary encoding
@@ -45,3 +46,8 @@ Build a custom LSM-tree-inspired inverted index with:
 - Segment merge compaction
 - Document deletion via tombstone markers
 - Distributed storage (S3, HDFS)
+
+## Implemented Enhancements
+
+- ✅ **Segment hot-reload** — Searcher's `Engine.ReloadSegments()` scans for new `.spdx` files every 10 seconds via a background goroutine, enabling zero-downtime document searchability
+- ✅ **Document status tracking** — Indexer updates PostgreSQL with PENDING → INDEXED/FAILED status after processing each document

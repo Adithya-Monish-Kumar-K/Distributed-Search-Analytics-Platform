@@ -18,9 +18,12 @@ Client POST /api/v1/documents
 │ Publisher                                    │
 │  1. Idempotency check (skip if already seen) │
 │  2. Assign shard: hash(docID) % 8           │
-│  3. Build IngestEvent {docID, title, body,   │
+│  3. Store metadata in PostgreSQL:            │
+│     {docID, title, content_size, shard_id,   │
+│      status=PENDING, created_at}             │
+│  4. Build IngestEvent {docID, title, body,   │
 │     shard, timestamp}                         │
-│  4. Publish to Kafka topic: document.ingest  │
+│  5. Publish to Kafka topic: document.ingest  │
 └──────────────────┬───────────────────────────┘
                    │
                    ▼
@@ -49,6 +52,13 @@ Kafka: document.ingest
 │  4. Track doc length + total docs            │
 │  5. If memIndex.Size() >= segmentMaxSize:    │
 │     → Flush()                                │
+└──────────────────┬───────────────────────────┘
+                   │
+                   ▼
+┌──────────────────────────────────────────────┐
+│ Update Document Status in PostgreSQL         │
+│  On success: status = INDEXED                │
+│  On error:   status = FAILED                 │
 └──────────────────┬───────────────────────────┘
                    │ (on flush)
                    ▼
@@ -119,15 +129,16 @@ Client GET /api/v1/search?q=distributed+AND+search&limit=10
                    │
                    ▼
 ┌──────────────────────────────────────────────┐
-│ Response                                     │
+│ Response (JSON envelope)                     │
 │  {                                           │
 │    "query": "distributed AND search",        │
-│    "total_hits": 1250,                       │
+│    "total": 1250,                            │
+│    "took_ms": 12,                            │
+│    "cache_hit": false,                       │
 │    "results": [                              │
 │      {"doc_id": "abc-123", "score": 4.8721}, │
 │      {"doc_id": "def-456", "score": 4.1203}  │
-│    ],                                        │
-│    "term_stats": {"distribut": 800, ...}     │
+│    ]                                         │
 │  }                                           │
 └──────────────────────────────────────────────┘
 ```
@@ -155,4 +166,59 @@ Search Handler (after response)
 │  4. Top queries by frequency                 │
 │  5. Exposes via GET /api/v1/analytics        │
 └──────────────────────────────────────────────┘
+```
+
+## Gateway Request Flow
+
+```
+Client Request (with API key)
+    │
+    ▼
+┌──────────────────────────────────────────────┐
+│ Gateway Middleware Chain                      │
+│  1. CORS headers                             │
+│  2. Extract API key from:                    │
+│     - Authorization: Bearer <key>            │
+│     - X-API-Key: <key>                       │
+│     - ?api_key=<key> query parameter         │
+│  3. Validate key: SHA-256 → PostgreSQL lookup │
+│  4. Rate limit check (token bucket per key)  │
+└──────────────────┬───────────────────────────┘
+                   │
+          ┌────────┴─────────┐
+          ▼                  ▼
+   ┌────────────┐     ┌────────────┐
+   │   Proxy    │     │  Direct DB │
+   │  Upstream  │     │   Handler  │
+   ├────────────┤     ├────────────┤
+   │ /documents │→8081│ /documents │ (GET list)
+   │ /search    │→8080│ /admin/keys│ (CRUD)
+   │ /analytics │→8080│            │
+   │ /cache/*   │→8080│            │
+   └────────────┘     └────────────┘
+```
+
+## Segment Hot-Reload Flow
+
+```
+Searcher Background Goroutine (every 10 seconds)
+    │
+    ▼
+┌──────────────────────────────────────────────┐
+│ Engine.ReloadSegments()                      │
+│  for each shard [0..7]:                      │
+│    1. Scan data/index/shard-N/ for .spdx     │
+│    2. Compare against already-loaded segments │
+│    3. For each NEW segment file:             │
+│       → Open SegmentReader                   │
+│       → Append to engine's segment list      │
+│    4. Log newly loaded segments              │
+└──────────────────────────────────────────────┘
+
+Timeline:
+  t=0s   Document ingested → Kafka → Indexer
+  t=1-5s Indexer builds index, flushes segment to disk
+  t=5s   Indexer updates PostgreSQL: status = INDEXED
+  t≤15s  Searcher hot-reload picks up new segment
+  t≤15s  Document now searchable (no restart needed)
 ```
