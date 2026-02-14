@@ -176,12 +176,12 @@ export async function getHealth(
   };
   const base = bases[service];
 
-  // Ingestion service only exposes GET /health (no /health/ready or /health/live)
-  if (service === "ingestion") {
+  // Ingestion and Gateway only expose GET /health (no /health/ready or /health/live).
+  // Search has /health/ready and /health/live via the health.Checker.
+  if (service === "ingestion" || service === "gateway") {
     return fetchJSON<HealthCheck>(`${base}/health`);
   }
 
-  // Search & gateway have /health/ready and /health/live via the health.Checker
   try {
     return await fetchJSON<HealthCheck>(`${base}/health/ready`);
   } catch {
@@ -195,7 +195,7 @@ export async function createApiKey(
   req: CreateApiKeyRequest,
   apiKey?: string,
 ): Promise<CreateApiKeyResponse> {
-  return fetchJSON<CreateApiKeyResponse>(`${GATEWAY_BASE}/admin/api-keys`, {
+  return fetchJSON<CreateApiKeyResponse>(`${GATEWAY_BASE}/api/v1/admin/keys`, {
     method: "POST",
     body: JSON.stringify(req),
     apiKey,
@@ -205,7 +205,7 @@ export async function createApiKey(
 export async function listApiKeys(
   apiKey?: string,
 ): Promise<{ keys: ApiKey[] }> {
-  return fetchJSON<{ keys: ApiKey[] }>(`${GATEWAY_BASE}/admin/api-keys`, {
+  return fetchJSON<{ keys: ApiKey[] }>(`${GATEWAY_BASE}/api/v1/admin/keys`, {
     apiKey,
   });
 }

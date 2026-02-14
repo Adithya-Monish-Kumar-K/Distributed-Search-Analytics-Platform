@@ -40,11 +40,15 @@ export default function DocumentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [showIngest, setShowIngest] = useState(false);
 
+  // Read the stored gateway API key from localStorage.
+  const getStoredApiKey = () =>
+    (typeof window !== "undefined" && localStorage.getItem("sp_api_key")) || undefined;
+
   const fetchDocs = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await getDocuments();
+      const res = await getDocuments(getStoredApiKey());
       setDocuments(res.documents ?? []);
     } catch (err) {
       // Some service configurations may not expose the documents list endpoint
